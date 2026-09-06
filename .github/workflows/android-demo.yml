@@ -39,6 +39,9 @@ jobs:
           mkdir -p evidence
           git rev-parse HEAD | tee evidence/commit.txt
           java -version 2> evidence/java-version.txt
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" 'platform-tools' > evidence/platform-tools-install.txt
+          "$ANDROID_HOME/platform-tools/adb" version > evidence/adb-version.txt
+          echo "$ANDROID_HOME/platform-tools" >> "$GITHUB_PATH"
           echo '81a82aaea5abcc8ff68b3dfcb58b3c3c429378efd98e7433460610fecd7ae45f  gradle/wrapper/gradle-wrapper.jar' | sha256sum -c -
           git diff --check
           python3 scripts/check_design.py
