@@ -54,6 +54,8 @@ jobs:
           cp -R app/build/reports evidence/build-reports
       - name: Prepare disposable Android emulator
         run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends libpulse0
           sudo chmod 666 /dev/kvm
           "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" 'system-images;android-35;google_apis;x86_64' 'emulator' > evidence/sdk-install.txt
           echo no | "$ANDROID_HOME/cmdline-tools/latest/bin/avdmanager" create avd --force --name mitin-demo --package 'system-images;android-35;google_apis;x86_64' --device pixel_6
