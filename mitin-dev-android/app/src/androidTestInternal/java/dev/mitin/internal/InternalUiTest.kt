@@ -7,6 +7,8 @@ import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
+import androidx.test.runner.lifecycle.ActivityLifecycleMonitorRegistry
+import androidx.test.runner.lifecycle.Stage
 import androidx.test.uiautomator.UiDevice
 import kotlinx.coroutines.*
 import org.junit.Assert.*
@@ -24,7 +26,7 @@ class InternalUiTest {
     private val large get()=InstrumentationRegistry.getArguments().getString("largeFont")=="true"
     private val manager get()=(context.applicationContext as InternalApplication).manager!!
     @Before fun reset() {
-        runBlocking { withTimeout(30_000) {while(manager.state.value.restoring) delay(50)}; manager.logout() }
+        runBlocking { withTimeout(30_000) {while(manager.state.value.restoring) delay(50)}; manager.logout(); manager.restore() }
         ui.waitForIdle();tap("internal-nav-2")
     }
     private fun tap(tag:String) {
@@ -46,6 +48,7 @@ class InternalUiTest {
         waitFor("login-email")
         ui.onNodeWithTag("login-email").performScrollTo().performTextReplacement(email)
         ui.onNodeWithTag("login-password").performScrollTo().performTextReplacement(TEST_PASSWORD)
+        ui.onNodeWithTag("network-login").assertIsEnabled()
         tap("network-login");waitFor("server-profile")
     }
     @Test fun realLoginProfileSessionsRevocationLogoutAllAndNewAccount() {
@@ -63,7 +66,20 @@ class InternalUiTest {
         tap("logout-all");tap("confirm-logout-all");waitFor("login-email")
         assertEquals("Все сессии отозваны на сервере.", manager.state.value.message)
         shot("05-server-logout-all")
-        device.pressBack();device.executeShellCommand("am start -n dev.mitin.app.internal/dev.mitin.internal.InternalActivity")
+        val closedActivity=ui.activity
+        device.pressBack()
+        ui.waitUntil(30_000) { closedActivity.isDestroyed }
+        device.executeShellCommand("am start -W -n dev.mitin.app.internal/dev.mitin.internal.InternalActivity")
+        ui.waitUntil(30_000) {
+            var resumed=false
+            InstrumentationRegistry.getInstrumentation().runOnMainSync {
+                resumed=ActivityLifecycleMonitorRegistry.getInstance().getActivitiesInStage(Stage.RESUMED)
+                    .any { it is InternalActivity && it !== closedActivity && !it.isFinishing }
+            }
+            resumed
+        }
+        ui.waitForIdle()
+        assertNull(manager.state.value.profile)
         waitFor("login-email")
         login(CLIENT_B);shot("06-server-profile-b")
         ui.onNodeWithText("Тестовый клиент Б").assertExists()

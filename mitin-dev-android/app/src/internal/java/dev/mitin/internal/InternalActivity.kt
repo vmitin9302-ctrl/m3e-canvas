@@ -8,6 +8,7 @@ import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
@@ -146,9 +147,9 @@ class InternalActivity : ComponentActivity() {
                             var password by remember { mutableStateOf("") }
                             DisposableEffect(Unit) { onDispose { password = ""; email = "" } }
                             OutlinedTextField(value = email, onValueChange = { if (it.length <= 254) email = it }, label = { Text("Email") },
-                                singleLine = true, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email), modifier = Modifier.fillMaxWidth().testTag("login-email"))
+                                shape = RoundedCornerShape(20.dp), singleLine = true, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email), modifier = Modifier.fillMaxWidth().testTag("login-email"))
                             OutlinedTextField(value = password, onValueChange = { if (it.codePointCount(0, it.length) <= 128) password = it }, label = { Text("Пароль") },
-                                singleLine = true, visualTransformation = PasswordVisualTransformation(), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                                shape = RoundedCornerShape(20.dp), singleLine = true, visualTransformation = PasswordVisualTransformation(), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
                                 modifier = Modifier.fillMaxWidth().testTag("login-password"))
                             PrimaryAction(if (vm.busy) "Проверяем…" else "Войти", "network-login", !vm.busy && email.isNotBlank() && password.codePointCount(0, password.length) in 15..128) {
                                 val transient = Secret(password); password = ""; keyboard?.hide(); vm.login(email, transient)

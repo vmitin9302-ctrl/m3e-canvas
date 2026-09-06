@@ -78,8 +78,9 @@ private val PurpleDark = darkColorScheme(
 }
 
 @Composable fun PrimaryAction(label: String, tag: String, enabled: Boolean = true, action: () -> Unit) {
-    Button(onClick = action, enabled = enabled, modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp).background(Brush.horizontalGradient(listOf(NeonViolet, NeonBlue)), RoundedCornerShape(30.dp)).testTag(tag),
-        colors = ButtonDefaults.buttonColors(containerColor = Color.Transparent, contentColor = Color(0xFF111528)),
+    val fill = if (enabled) listOf(NeonViolet, NeonBlue) else listOf(MaterialTheme.colorScheme.surfaceContainerHigh, MaterialTheme.colorScheme.surfaceContainerHigh)
+    Button(onClick = action, enabled = enabled, modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp).background(Brush.horizontalGradient(fill), RoundedCornerShape(30.dp)).testTag(tag),
+        colors = ButtonDefaults.buttonColors(containerColor = Color.Transparent, contentColor = Color(0xFF111528), disabledContainerColor = Color.Transparent, disabledContentColor = MaterialTheme.colorScheme.onSurfaceVariant),
         contentPadding = PaddingValues(horizontal = 20.dp, vertical = 16.dp)) {
         Text(label, style = MaterialTheme.typography.titleMedium)
     }
