@@ -1,6 +1,9 @@
 package dev.mitin.demo
 
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.ChevronRight
@@ -14,15 +17,15 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 
 private val PurpleDark = darkColorScheme(
-    primary = Color(0xFFD2BCFC), onPrimary = Color(0xFF32226F),
-    primaryContainer = Color(0xFF4C3889), onPrimaryContainer = Color(0xFFE9DDFF),
-    secondaryContainer = Color(0xFF4B425D), onSecondaryContainer = Color(0xFFE9DDFD),
+    primary = Color(0xFFC3AEFF), onPrimary = Color(0xFF17102D),
+    primaryContainer = Color(0xFF242343), onPrimaryContainer = Color(0xFFE9E2FF),
+    secondaryContainer = Color(0xFF20273D), onSecondaryContainer = Color(0xFFE3E9FF),
     tertiaryContainer = Color(0xFF6C3644), onTertiaryContainer = Color(0xFFFDDAE1),
-    surface = Color(0xFF141317), background = Color(0xFF141317),
-    surfaceContainerLow = Color(0xFF1C1B1F), surfaceContainer = Color(0xFF201F23),
-    surfaceContainerHigh = Color(0xFF2B292D), surfaceContainerHighest = Color(0xFF363438),
-    onSurface = Color(0xFFE4E1E7), onBackground = Color(0xFFE4E1E7),
-    onSurfaceVariant = Color(0xFFC9C4D1), outline = Color(0xFF938F9B), outlineVariant = Color(0xFF494550),
+    surface = Color(0xFF090C13), background = Color(0xFF090C13),
+    surfaceContainerLow = Color(0xFF111725), surfaceContainer = Color(0xFF101521),
+    surfaceContainerHigh = Color(0xFF1B2233), surfaceContainerHighest = Color(0xFF253047),
+    onSurface = Color(0xFFF0F2FA), onBackground = Color(0xFFF0F2FA),
+    onSurfaceVariant = Color(0xFFB4BFD4), outline = Color(0xFF7B88A4), outlineVariant = Color(0xFF303C55),
     error = Color(0xFFF2B8B5), onError = Color(0xFF601410),
     errorContainer = Color(0xFF8C1D18), onErrorContainer = Color(0xFFF9DEDC)
 )
@@ -46,7 +49,7 @@ private val PurpleDark = darkColorScheme(
 }
 
 @Composable fun InfoCard(title: String, body: String, accent: Boolean = false, tag: String = "") {
-    Card(Modifier.fillMaxWidth().testTag(tag), shape = RoundedCornerShape(28.dp),
+    Card(Modifier.fillMaxWidth().testTag(tag), shape = RoundedCornerShape(28.dp), border = BorderStroke(1.dp, NeonEdge),
         colors = CardDefaults.cardColors(containerColor = if (accent) MaterialTheme.colorScheme.primaryContainer
             else MaterialTheme.colorScheme.surfaceContainerLow)) {
         Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -58,11 +61,11 @@ private val PurpleDark = darkColorScheme(
 }
 
 @Composable fun ActionRow(title: String, detail: String, icon: ImageVector, tag: String, click: () -> Unit) {
-    Card(onClick = click, modifier = Modifier.fillMaxWidth().testTag(tag), shape = RoundedCornerShape(26.dp),
+    Card(onClick = click, modifier = Modifier.fillMaxWidth().testTag(tag), shape = RoundedCornerShape(26.dp), border = BorderStroke(1.dp, NeonEdge),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)) {
         Row(Modifier.padding(16.dp), horizontalArrangement = Arrangement.spacedBy(14.dp),
             verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
-            Surface(shape = RoundedCornerShape(16.dp), color = MaterialTheme.colorScheme.primaryContainer) {
+            Surface(shape = RoundedCornerShape(16.dp), color = MaterialTheme.colorScheme.primaryContainer, border = BorderStroke(0.7.dp, NeonEdge)) {
                 Icon(icon, null, Modifier.padding(10.dp).size(22.dp))
             }
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -75,14 +78,15 @@ private val PurpleDark = darkColorScheme(
 }
 
 @Composable fun PrimaryAction(label: String, tag: String, enabled: Boolean = true, action: () -> Unit) {
-    Button(onClick = action, enabled = enabled, modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp).testTag(tag),
+    Button(onClick = action, enabled = enabled, modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp).background(Brush.horizontalGradient(listOf(NeonViolet, NeonBlue)), RoundedCornerShape(30.dp)).testTag(tag),
+        colors = ButtonDefaults.buttonColors(containerColor = Color.Transparent, contentColor = Color(0xFF111528)),
         contentPadding = PaddingValues(horizontal = 20.dp, vertical = 16.dp)) {
         Text(label, style = MaterialTheme.typography.titleMedium)
     }
 }
 
 @Composable fun SecondaryAction(label: String, tag: String, action: () -> Unit) {
-    FilledTonalButton(onClick = action, modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp).testTag(tag),
+    FilledTonalButton(onClick = action, border = BorderStroke(1.dp, NeonEdge), modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp).testTag(tag),
         contentPadding = PaddingValues(horizontal = 20.dp, vertical = 14.dp)) { Text(label) }
 }
 

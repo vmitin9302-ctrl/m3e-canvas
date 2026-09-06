@@ -18,7 +18,7 @@ assert manifest.find("application").get(android + "allowBackup") == "false"
 assert manifest.find("application").get(android + "fullBackupContent") == "false"
 backup = ET.parse(root / "app/src/main/res/xml/data_extraction_rules.xml").getroot()
 assert all(backup.find(kind).findall("exclude") for kind in ("cloud-backup", "device-transfer"))
-source = "\n".join(p.read_text() for p in (root / "app/src/main/java").rglob("*.kt"))
+source = "\n".join(p.read_text() for directory in (root / "app/src/main/java", root / "app/src/demo/java") for p in directory.rglob("*.kt"))
 assert "WebView" not in source
 assert "https://" not in source and "http://" not in source
 print("52 target frames preserved; native offline source boundary verified")

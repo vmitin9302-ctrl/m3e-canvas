@@ -52,7 +52,7 @@ jobs:
           python3 scripts/check_design.py
       - name: Build APK, unit tests and Android lint
         run: |
-          ./gradlew --no-daemon --console=plain assembleDemoDebug testDemoDebugUnitTest lintDemoDebug assembleDemoDebugAndroidTest 2>&1 | tee evidence/gradle-build.txt
+          ./gradlew --no-daemon --console=plain assembleDemoDebug testDemoDebugUnitTest lintDemoDebug assembleDemoDebugAndroidTest assembleInternalDebug testInternalDebugUnitTest lintInternalDebug 2>&1 | tee evidence/gradle-build.txt
           cp app/build/outputs/apk/demo/debug/app-demo-debug.apk evidence/MITIN-DEV-demoDebug.apk
           sha256sum evidence/MITIN-DEV-demoDebug.apk | tee evidence/APK-SHA256.txt
           "$ANDROID_HOME/cmdline-tools/latest/bin/apkanalyzer" manifest permissions evidence/MITIN-DEV-demoDebug.apk > evidence/apk-permissions.txt

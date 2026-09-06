@@ -11,13 +11,22 @@ android {
         applicationId = "dev.mitin.app"
         minSdk = 26
         targetSdk = 36
-        versionCode = 1
-        versionName = "0.1.0"
+        versionCode = 2
+        versionName = "0.2.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         resourceConfigurations += listOf("ru", "en")
     }
     flavorDimensions += "environment"
     productFlavors {
+        create("internal") {
+            dimension = "environment"
+            applicationIdSuffix = ".internal"
+            versionNameSuffix = "-internal"
+            val endpoint = providers.gradleProperty("mitinApiBaseUrl").orElse("").get()
+            require(endpoint.isEmpty() || endpoint == "https://localhost:8443/") { "Only the explicit local TLS harness origin is allowed" }
+            buildConfigField("String", "API_BASE_URL", "\"$endpoint\"")
+            resValue("string", "app_name", "MITIN DEV · Тест")
+        }
         create("demo") {
             dimension = "environment"
             applicationIdSuffix = ".demo"
@@ -47,6 +56,10 @@ dependencies {
     implementation("androidx.lifecycle:lifecycle-runtime-compose:2.9.4")
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.9.0")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.10.2")
+    "internalImplementation"("com.squareup.okhttp3:okhttp:5.3.2")
+    "testInternalImplementation"("com.squareup.okhttp3:mockwebserver:5.3.2")
+    "testInternalImplementation"("com.squareup.okhttp3:okhttp-tls:5.3.2")
+    implementation("androidx.core:core-splashscreen:1.0.1")
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.10.2")
     androidTestImplementation(platform("androidx.compose:compose-bom:2025.10.01"))
@@ -56,4 +69,33 @@ dependencies {
     androidTestImplementation("androidx.test.uiautomator:uiautomator:2.3.0")
     debugImplementation("androidx.compose.ui:ui-tooling")
     debugImplementation("androidx.compose.ui:ui-test-manifest")
+}
+
+// The private harness supplies only its PUBLIC CA certificate. No key is embedded.
+val generatedCa = layout.buildDirectory.dir("generated/internalCa")
+val prepareInternalCa by tasks.registering {
+    val source = providers.gradleProperty("mitinCaPem")
+    inputs.property("certificatePath", source.orElse(""))
+    if (source.isPresent) inputs.file(source)
+    outputs.dir(generatedCa)
+    doLast {
+        val target = generatedCa.get().file("raw/mitin_test_ca.pem").asFile
+        target.parentFile.mkdirs()
+        val pem = if (source.isPresent) file(source.get()).readText() else file("src/internal/res/raw/unconfigured_ca.pem").readText()
+        require(pem.contains("BEGIN CERTIFICATE") && !pem.contains("PRIVATE KEY"))
+        target.writeText(pem)
+    }
+}
+android.sourceSets.getByName("internal").res.srcDir(generatedCa)
+tasks.configureEach { if (name.startsWith("mergeInternal") || name.startsWith("generateInternal") || name.startsWith("lint")) dependsOn(prepareInternalCa) }
+
+// Dependency inventory for the isolated OSV audit (no credentials, no build cache).
+tasks.register("writeDependencyInventory") {
+    doLast {
+        val coordinates = configurations.filter { it.isCanBeResolved && it.name.endsWith("RuntimeClasspath") }
+            .flatMap { it.incoming.resolutionResult.allComponents }
+            .mapNotNull { it.moduleVersion?.let { v -> "${v.group}:${v.name}:${v.version}" } }
+            .filterNot { it.startsWith("dev.mitin") || it.startsWith(":") }.distinct().sorted()
+        layout.buildDirectory.file("reports/dependency-coordinates.txt").get().asFile.apply { parentFile.mkdirs(); writeText(coordinates.joinToString("\n")) }
+    }
 }
