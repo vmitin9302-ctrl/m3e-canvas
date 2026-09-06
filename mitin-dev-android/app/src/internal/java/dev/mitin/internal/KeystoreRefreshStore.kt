@@ -16,9 +16,10 @@ import javax.crypto.SecretKey
 import javax.crypto.spec.GCMParameterSpec
 
 /** Keystore contains the AES key, NOT the refresh string. Ciphertext is no-backup. */
-class KeystoreRefreshStore(context: Context) : RefreshStore {
-    private val file = AtomicFile(File(context.noBackupFilesDir, "auth-session-v1.bin"))
-    private val alias = "${context.packageName}.auth.aes.v1"
+class KeystoreRefreshStore(context: Context, namespace: String = "auth") : RefreshStore {
+    init { require(Regex("[a-z0-9_]{1,60}").matches(namespace)) }
+    private val file = AtomicFile(File(context.noBackupFilesDir, "$namespace-session-v1.bin"))
+    private val alias = "${context.packageName}.$namespace.aes.v1"
     private val aad = "${context.packageName}|auth-v1".toByteArray(Charsets.UTF_8)
     private fun keystore() = KeyStore.getInstance("AndroidKeyStore").apply { load(null) }
     private fun key(create: Boolean): SecretKey {

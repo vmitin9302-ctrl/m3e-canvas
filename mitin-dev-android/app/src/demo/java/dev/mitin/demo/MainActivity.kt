@@ -129,7 +129,7 @@ class MainActivity : ComponentActivity() {
                     Triple("Главная", "o-home", Icons.Outlined.Dashboard), Triple("Заявки", "o-leads", Icons.Outlined.Inbox),
                     Triple("Проекты", "o-projects", Icons.Outlined.WorkOutline), Triple("Ещё", "o-more", Icons.Outlined.MoreHoriz)
                 )
-                NavigationBar(modifier = Modifier.border(0.5.dp, NeonEdge)) {
+                NavigationBar(modifier = Modifier.border(androidx.compose.foundation.BorderStroke(0.5.dp, NeonEdge))) {
                     entries.forEach { (label, route, icon) ->
                         NavigationBarItem(
                             selected = screen == route,

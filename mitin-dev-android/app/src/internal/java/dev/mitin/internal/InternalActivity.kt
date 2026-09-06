@@ -121,7 +121,7 @@ class InternalActivity : ComponentActivity() {
             }
         }
     }, bottomBar = {
-        NavigationBar(Modifier.border(0.5.dp, NeonEdge)) {
+        NavigationBar(Modifier.border(androidx.compose.foundation.BorderStroke(0.5.dp, NeonEdge))) {
             listOf("Готовые проекты" to Icons.Outlined.WorkOutline, "Обсудить с AI" to Icons.Outlined.AutoAwesome, "Мой кабинет" to Icons.Outlined.PersonOutline).forEachIndexed { index, (label, icon) ->
                 NavigationBarItem(selected = tab == index, onClick = { tab = index; showSessions = false; keyboard?.hide() },
                     icon = { Icon(icon, null) }, label = { Text(label) }, modifier = Modifier.testTag("internal-nav-$index").heightIn(min = if (LocalDensity.current.fontScale > 1.3f) 130.dp else 90.dp))
