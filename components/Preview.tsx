@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Item } from "@/lib/tokens";
+import { initialPreviewState, patchPreviewState, previewItem, previewVisible, type PreviewState } from "@/lib/preview-state";
 import { AnimatePresence, animate, motion, useMotionValue, useTransform } from "motion/react";
 import type { TargetAndTransition, Variants } from "motion/react";
 import {
@@ -148,6 +149,8 @@ function Tappable({
   onPick,
   menuOpen,
   onMenu,
+  textValue,
+  onText,
 }: {
   item: Item;
   p: Palette;
@@ -163,7 +166,10 @@ function Tappable({
   /** whether this dropdown's menu is the open one; the screen keeps at most one open */
   menuOpen?: boolean;
   onMenu?: (open: boolean) => void;
+  textValue?: string;
+  onText?: (value: string) => void;
 }) {
+  const lang = useLang();
   const [pressed, setPressed] = useState(false);
   const [hot, setHot] = useState<string | null>(null);
   const menu = !!menuOpen;
@@ -224,6 +230,12 @@ function Tappable({
   return (
     <div
       ref={ref}
+      data-preview-item={item.id}
+      role={onPick ? "combobox" : onTap ? "button" : undefined}
+      aria-label={onPick || onTap ? item.label || item.note || item.icon || undefined : undefined}
+      aria-expanded={onPick ? menu : undefined}
+      tabIndex={onPick || onTap ? 0 : undefined}
+      onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); if (onPick) onMenu?.(!menu); else onTap?.(); } }}
       onPointerDown={(e) => {
         if (onValue) {
           e.stopPropagation();
@@ -244,6 +256,18 @@ function Tappable({
       style={{ cursor: live || onValue ? "pointer" : "default", display: "flex", position: "relative", touchAction: "none" }}
     >
       <M3Node item={item} palette={p} widths={widths} radii={radii} interactive={false} pressed={pressed && !onValue} />
+      {onText && (
+        <input
+          aria-label={item.label}
+          value={textValue ?? ""}
+          maxLength={1000}
+          autoComplete="off"
+          onChange={(e) => onText(e.target.value)}
+          onPointerDown={(e) => e.stopPropagation()}
+          onKeyDown={(e) => e.stopPropagation()}
+          style={{ position: "absolute", inset: "18px 12px 5px", width: "calc(100% - 24px)", background: p.surface, color: p.onSurface, border: "none", font: "inherit", fontSize: 16, outlineColor: p.primary }}
+        />
+      )}
       {live && (
         <motion.div
           aria-hidden
@@ -265,6 +289,10 @@ function Tappable({
       {slots.map((s) => (
         <div
           key={s.key}
+          role="button"
+          tabIndex={0}
+          aria-label={s.key.startsWith("tab:") ? item.tabs?.[Number(s.key.slice(4))]?.label : s.key === "icon" ? (item.icon === "arrow_back" ? t("back", lang) : item.icon ?? undefined) : item.icon2 ?? undefined}
+          onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); e.stopPropagation(); onSlot!(s.key); } }}
           onPointerDown={(e) => {
             e.stopPropagation();
             setHot(s.key);
@@ -288,6 +316,7 @@ function Tappable({
       {onPick && menu && (
         /* the dropdown's menu, under the field: surfaceContainer, 48dp items, the chosen one tinted */
         <div
+          role="listbox"
           onPointerDown={(e) => e.stopPropagation()}
           style={{
             position: "absolute",
@@ -308,6 +337,10 @@ function Tappable({
           {(item.tabs ?? []).map((opt, i) => (
             <div
               key={i}
+              role="option"
+              aria-selected={item.selected === i}
+              tabIndex={0}
+              onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); e.stopPropagation(); onPick(i); onMenu?.(false); } }}
               onClick={(e) => {
                 e.stopPropagation();
                 onPick(i);
@@ -345,6 +378,8 @@ function Screen({
   onFlip,
   values,
   onValue,
+  formState,
+  onForm,
 }: {
   frame: Frame;
   groups: Group[];
@@ -356,11 +391,13 @@ function Screen({
   onFlip: (id: string) => void;
   values: Record<string, number>;
   onValue: (id: string, v: number) => void;
+  formState: PreviewState;
+  onForm: (patch: PreviewState) => void;
 }) {
   /* the dropdown whose menu is open, if any; its group is lifted above the rest */
   const [menuId, setMenuId] = useState<string | null>(null);
   return (
-    <div style={{ position: "absolute", inset: 0, background: p[frame.bg ?? "surface"], overflow: "hidden" }}>
+    <div data-preview-screen={frame.id} style={{ position: "absolute", inset: 0, background: p[frame.bg ?? "surface"], overflow: "hidden" }}>
       {groups.map((g) => (
         <div
           key={g.id}
@@ -380,6 +417,7 @@ function Screen({
           }
         >
           {((corners) => g.items.map((it, i) => {
+            if (!previewVisible(it, formState)) return null;
             const conn = connectSpecOf(it);
             const n = g.free ? 1 : g.items.length;
             const radii = g.free
@@ -402,16 +440,18 @@ function Screen({
                   ? uniformRadii(conn.outer)
                   : baseRadii(it);
             const act = it.action;
-            let shown = flipped.has(it.id) ? flippedLook(it) : it;
+            const bound = previewItem(it, formState);
+            let shown = flipped.has(it.id) ? flippedLook(bound) : bound;
             if (it.kind === "slider" && values[it.id] !== undefined) shown = { ...shown, value: values[it.id] };
-            if (it.kind === "select" && values[it.id] !== undefined) shown = { ...shown, selected: values[it.id] };
+            if (it.kind === "select" && !it.preview?.key && values[it.id] !== undefined) shown = { ...shown, selected: values[it.id] };
             const navKind = it.kind === "bottomNav" || it.kind === "navRail" || it.kind === "tabs";
             /* bars with the same destinations are one bar to the visitor: the choice follows them across screens */
             const navKey = navKind ? `nav:${it.kind}:${(it.tabs ?? []).map((t) => t.label).join("|")}` : "";
             if (navKind && values[navKey] !== undefined && values[navKey] >= 0) shown = { ...shown, selected: values[navKey] };
             const tap =
-              act || flips(it)
+              act || flips(it) || it.preview?.set
                 ? () => {
+                    if (it.preview?.set) onForm(it.preview.set);
                     if (flips(it)) onFlip(it.id);
                     if (act) onAction(act);
                   }
@@ -437,7 +477,9 @@ function Screen({
                     : undefined
                 }
                 onValue={it.kind === "slider" ? (v) => onValue(it.id, v) : undefined}
-                onPick={it.kind === "select" ? (i) => onValue(it.id, i) : undefined}
+                onPick={it.kind === "select" ? (i) => it.preview?.key ? onForm({ [it.preview.key]: it.tabs?.[i]?.label ?? "" }) : onValue(it.id, i) : undefined}
+                textValue={it.preview?.key ? formState[it.preview.key] : undefined}
+                onText={it.kind === "textField" && it.preview?.key ? (value) => onForm({ [it.preview!.key!]: value }) : undefined}
                 menuOpen={menuId === it.id}
                 onMenu={it.kind === "select" ? (open) => setMenuId(open ? it.id : null) : undefined}
               />
@@ -481,6 +523,7 @@ export function Preview({
   const [scale, setScale] = useState(1);
   const [flipped, setFlipped] = useState<Set<string>>(() => new Set());
   const [values, setValues] = useState<Record<string, number>>({});
+  const [formState, setFormState] = useState(() => initialPreviewState(doc));
   const [peek, setPeek] = useState<Peek | null>(null);
   const stackRef = useRef(stack);
   stackRef.current = stack;
@@ -551,7 +594,7 @@ export function Preview({
       const isWide = window.innerWidth >= 720;
       setWide(isWide);
       setScale(
-        Math.min(1.4, (window.innerHeight - 32) / maxOuterH, (window.innerWidth - (isWide ? WIDE_CONTROL_SPACE + 16 : 16)) / maxOuterW),
+        Math.min(1.4, (window.innerHeight - (isWide ? 32 : 104)) / maxOuterH, (window.innerWidth - (isWide ? WIDE_CONTROL_SPACE + 16 : 16)) / maxOuterW),
       );
     };
     fit();
@@ -600,6 +643,7 @@ export function Preview({
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
+      if (e.target instanceof HTMLElement && (e.target.matches("input, textarea, select") || e.target.isContentEditable)) return;
       if (e.key === "Escape") onClose();
       if (e.key === "Backspace" || e.key === "ArrowLeft") back();
     };
@@ -738,6 +782,8 @@ export function Preview({
     onFlip: flip,
     values,
     onValue: (id: string, v: number) => setValues((m) => ({ ...m, [id]: v })),
+    formState,
+    onForm: (patch: PreviewState) => setFormState((current) => patchPreviewState(current, patch)),
   };
 
   const barBtn: React.CSSProperties = {
@@ -785,6 +831,7 @@ export function Preview({
         }}
       >
         <motion.div
+          data-preview-phone="true"
           onPointerDown={onScreenPointerDown}
           style={{
             position: "absolute",

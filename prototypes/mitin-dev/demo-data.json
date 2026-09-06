@@ -1,0 +1,21 @@
+{
+  "as_of": "2026-09-06",
+  "fictional": true,
+  "budget_ranges": ["до 10 000 ₽", "10–20 тыс.", "20–40 тыс.", "40–70 тыс.", "70 тыс.+", "пока не знаю"],
+  "stage_statuses": ["Не начат", "В работе", "Ожидаем клиента", "Завершён"],
+  "stage_status_codes": ["not_started", "in_progress", "waiting_client", "completed"],
+  "leads": [
+    {"id": "1045", "client": "Алексей Смирнов", "type": "Сайт", "budget_range": "20–40 тыс.", "source": "Приложение", "status": "new", "date": "06.09.2026", "project_id": null},
+    {"id": "1043", "client": "Ольга Лебедева", "type": "Бот", "budget_range": "10–20 тыс.", "source": "Telegram", "status": "waiting", "date": "05.09.2026", "project_id": null},
+    {"id": "1044", "client": "Игорь Соколов", "type": "CRM", "budget_range": "40–70 тыс.", "source": "Сайт", "status": "closed", "date": "04.09.2026", "project_id": null},
+    {"id": "1042", "client": "Алексей Смирнов", "type": "Сайт", "budget_range": "20–40 тыс.", "source": "Сайт", "status": "in_progress", "date": "01.09.2026", "project_id": "p001"},
+    {"id": "1041", "client": "Павел Ильин", "type": "Сайт", "budget_range": "20–40 тыс.", "source": "Рекомендация", "status": "in_progress", "date": "28.08.2026", "project_id": "p003"},
+    {"id": "1040", "client": "Марина Орлова", "type": "Сайт", "budget_range": "до 10 000 ₽", "source": "Рекомендация", "status": "closed", "date": "20.08.2026", "project_id": "p002"}
+  ],
+  "projects": [
+    {"id": "p001", "lead_id": "1042", "name": "Сайт автосервиса", "client": "Алексей Смирнов", "stage": "Разработка", "status": "active", "next": "Получить фотографии работ", "waiting_client": true, "cost": 30000, "paid": 15000, "start": "01.09.2026", "deadline": "18.09.2026"},
+    {"id": "p002", "lead_id": "1040", "name": "Студия «Линия»", "client": "Марина Орлова", "stage": "Сопровождение", "status": "support", "next": "Плановая проверка 10 сентября", "waiting_client": false, "cost": 9000, "paid": 9000, "start": "20.08.2026", "deadline": "01.09.2026"},
+    {"id": "p003", "lead_id": "1041", "name": "Кабинет «Точка баланса»", "client": "Павел Ильин", "stage": "Проверка", "status": "active", "next": "Получить согласование демо", "waiting_client": true, "cost": 25000, "paid": 12500, "start": "28.08.2026", "deadline": "12.09.2026"}
+  ],
+  "unread_messages": [{"id": "m001", "project_id": "p001"}, {"id": "m002", "project_id": "p003"}]
+}

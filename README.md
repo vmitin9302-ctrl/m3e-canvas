@@ -73,6 +73,16 @@ Works with any AI coding tool that takes a prompt, such as Claude Code, Codex, G
 
 ## Develop
 
+### MITIN DEV prototype in this fork
+
+The local `/mitin-dev/` route opens the native Canvas client + owner prototype.
+Start the app with the commands below, then use **Открыть Preview** or
+**Редактировать в Canvas**. The editable JSON, fictional fixtures, and instructions
+are in [prototypes/mitin-dev](prototypes/mitin-dev/README.md).
+This is a local prototype: no production API, database, accounts, notifications,
+or deployment. See the [product specification](docs/MITIN_DEV_APP_PRODUCT_SPEC.md)
+and [future architecture](docs/MITIN_DEV_APP_ARCHITECTURE.md).
+
 ```bash
 npm install
 npm run dev        # http://localhost:3000

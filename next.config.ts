@@ -9,6 +9,7 @@ const nextConfig: NextConfig = {
   trailingSlash: true,
   images: { unoptimized: true },
   devIndicators: false,
+  allowedDevOrigins: ["terminal.local"],
 };
 
 export default nextConfig;
