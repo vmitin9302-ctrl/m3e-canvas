@@ -69,6 +69,9 @@ class DemoFlowTest {
         tap("stage-detail"); screen("c-stage"); shot("07-client-stage")
         tap("stage-demo"); screen("c-demo"); shot("08-client-demo")
         tap("open-demo"); screen("c-demo-site"); shot("09-client-demo-site")
+        tap("demo-return"); screen("c-demo")
+        device.pressBack(); screen("c-stage")
+        tap("stage-demo"); tap("open-demo")
         device.pressBack(); screen("c-demo")
         chooseOwner(); tap("owner-leads"); screen("o-leads"); shot("10-owner-leads")
         tap("lead-1046"); screen("o-lead")
@@ -84,6 +87,12 @@ class DemoFlowTest {
         chooseClientHome(); tap("client-project-2"); screen("c-project")
         ui.onNodeWithText("Разработка · Ожидаем клиента").assertExists()
         shot("14-client-shared-project")
+        tap("view-demo"); ui.onNodeWithText("Демо ещё нет").assertExists()
+        tap("sample-demo"); screen("c-demo-site")
+        device.pressBack(); screen("c-demo")
+        ui.onNodeWithText("Демо ещё нет").assertExists()
+        device.pressBack(); screen("c-project")
+        ui.onNodeWithText("Сайт · заявка №1046").assertExists()
         // Read a fresh repository from disk; state is not merely retained in Compose memory.
         val fresh = DemoViewModel(context.applicationContext as Application).repository.state.value
         val created = fresh.projects.single { it.leadId == 1046 }

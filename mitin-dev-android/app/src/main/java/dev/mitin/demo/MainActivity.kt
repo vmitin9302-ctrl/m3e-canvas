@@ -45,6 +45,8 @@ class MainActivity : ComponentActivity() {
     val role = DemoRole.valueOf(roleName)
     var stack by rememberSaveable { mutableStateOf(listOf("c-welcome")) }
     val screen = stack.last()
+    var projectHistory by rememberSaveable { mutableStateOf(listOf(1)) }
+    var leadHistory by rememberSaveable { mutableStateOf(listOf(1045)) }
     var selectedLeadId by rememberSaveable { mutableIntStateOf(1045) }
     var selectedProjectId by rememberSaveable { mutableIntStateOf(1) }
     var selectedStage by rememberSaveable { mutableIntStateOf(2) }
@@ -65,9 +67,26 @@ class MainActivity : ComponentActivity() {
     val lead = data.leads.find { it.id == selectedLeadId } ?: data.leads.last()
     val projectLead = data.leads.single { it.id == project.leadId }
     val brief = Brief(type, task, features, BudgetRange.valueOf(budgetName), deadline, integrations, comments)
-    fun go(route: String) { keyboard?.hide(); if (screen != route) stack = stack + route }
-    fun root(route: String) { keyboard?.hide(); stack = listOf(route) }
-    fun back() { keyboard?.hide(); if (stack.size > 1) stack = stack.dropLast(1) }
+    fun go(route: String) {
+        keyboard?.hide()
+        if (screen != route) {
+            stack = stack + route
+            projectHistory = projectHistory + selectedProjectId
+            leadHistory = leadHistory + selectedLeadId
+        }
+    }
+    fun root(route: String) {
+        keyboard?.hide(); stack = listOf(route)
+        projectHistory = listOf(selectedProjectId); leadHistory = listOf(selectedLeadId)
+    }
+    fun back() {
+        keyboard?.hide()
+        if (stack.size > 1) {
+            stack = stack.dropLast(1)
+            projectHistory = projectHistory.dropLast(1); leadHistory = leadHistory.dropLast(1)
+            selectedProjectId = projectHistory.last(); selectedLeadId = leadHistory.last()
+        }
+    }
     fun stages() { selectedStage = project.currentStage; stageChoice = project.stages[selectedStage].name; go("o-stages") }
     BackHandler(enabled = stack.size > 1) { back() }
     val onboarding = screen in setOf("demo", "c-welcome", "c-login", "c-type", "c-brief", "c-brief-details", "c-review", "c-sent")
@@ -265,7 +284,7 @@ class MainActivity : ComponentActivity() {
                             InfoCard("АВТО / СЕРВИС", "Диагностика, обслуживание и ремонт с понятными этапами работы.", true)
                             listOf("Диагностика", "Техническое обслуживание", "Ремонт").forEach { InfoCard(it, "Пример раздела будущего сайта") }
                             Note("Это нативный макет демо внутри приложения, не работающий сайт. Запись на ремонт не выполняется.")
-                            PrimaryAction("Вернуться к согласованию", "demo-return") { go("c-demo") }
+                            PrimaryAction("Вернуться к согласованию", "demo-return") { back() }
                         }
                         "c-feedback" -> {
                             Heading("Что поправить?")
