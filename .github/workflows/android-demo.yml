@@ -1,0 +1,101 @@
+name: Android demo APK
+
+on:
+  pull_request:
+    paths:
+      - 'mitin-dev-android/**'
+      - '.github/workflows/android-demo.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: android-demo-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  build-and-emulator:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    defaults:
+      run:
+        working-directory: mitin-dev-android
+        shell: bash
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+      - uses: actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3 # v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Verify source and Gradle wrapper
+        run: |
+          mkdir -p evidence
+          git rev-parse HEAD | tee evidence/commit.txt
+          java -version 2> evidence/java-version.txt
+          echo '81a82aaea5abcc8ff68b3dfcb58b3c3c429378efd98e7433460610fecd7ae45f  gradle/wrapper/gradle-wrapper.jar' | sha256sum -c -
+          git diff --check
+          python3 scripts/check_design.py
+      - name: Build APK, unit tests and Android lint
+        run: |
+          ./gradlew --no-daemon --console=plain assembleDemoDebug testDemoDebugUnitTest lintDemoDebug assembleDemoDebugAndroidTest | tee evidence/gradle-build.txt
+          cp app/build/outputs/apk/demo/debug/app-demo-debug.apk evidence/MITIN-DEV-demoDebug.apk
+          sha256sum evidence/MITIN-DEV-demoDebug.apk | tee evidence/APK-SHA256.txt
+          "$ANDROID_HOME/cmdline-tools/latest/bin/apkanalyzer" manifest permissions evidence/MITIN-DEV-demoDebug.apk > evidence/apk-permissions.txt
+          if grep -q 'android.permission.INTERNET' evidence/apk-permissions.txt; then exit 1; fi
+          "$ANDROID_HOME/build-tools/36.0.0/apksigner" verify --verbose evidence/MITIN-DEV-demoDebug.apk > evidence/apk-signature.txt
+          cp -R app/build/test-results evidence/unit-results
+          cp -R app/build/reports evidence/build-reports
+      - name: Prepare disposable Android emulator
+        run: |
+          sudo chmod 666 /dev/kvm
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" 'system-images;android-35;google_apis;x86_64' 'emulator' > evidence/sdk-install.txt
+          echo no | "$ANDROID_HOME/cmdline-tools/latest/bin/avdmanager" create avd --force --name mitin-demo --package 'system-images;android-35;google_apis;x86_64' --device pixel_6
+          "$ANDROID_HOME/emulator/emulator" -version > evidence/emulator-version.txt
+          nohup "$ANDROID_HOME/emulator/emulator" -avd mitin-demo -no-window -no-audio -no-boot-anim -no-snapshot -gpu swiftshader_indirect -camera-back none -camera-front none > evidence/emulator.log 2>&1 &
+          timeout 240 adb wait-for-device
+          timeout 240 bash -c 'until [ "$(adb shell getprop sys.boot_completed | tr -d "\r")" = 1 ]; do sleep 2; done'
+          adb shell input keyevent 82
+          adb shell settings put global window_animation_scale 0
+          adb shell settings put global transition_animation_scale 0
+          adb shell settings put global animator_duration_scale 0
+          adb shell svc wifi disable
+          adb shell svc data disable
+          adb shell settings put global airplane_mode_on 1
+          adb shell am broadcast -a android.intent.action.AIRPLANE_MODE --ez state true
+          adb shell getprop ro.build.version.release > evidence/android-version.txt
+          adb shell getprop ro.build.version.sdk >> evidence/android-version.txt
+      - name: Offline journeys, keyboard, Back and recreation
+        run: |
+          timeout 600 ./gradlew --no-daemon --console=plain connectedDemoDebugAndroidTest | tee evidence/instrumentation-normal.txt
+          cp -R app/build/outputs/androidTest-results evidence/android-tests-normal
+          adb pull /sdcard/Android/data/dev.mitin.app.demo/files/screenshots evidence/screenshots-normal
+      - name: Repeat journeys with 160 percent system font
+        run: |
+          adb shell settings put system font_scale 1.6
+          adb shell am force-stop dev.mitin.app.demo
+          timeout 600 ./gradlew --no-daemon --console=plain connectedDemoDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.largeFont=true | tee evidence/instrumentation-large-font.txt
+          cp -R app/build/outputs/androidTest-results evidence/android-tests-large-font
+          adb pull /sdcard/Android/data/dev.mitin.app.demo/files/screenshots evidence/screenshots-large-font
+          adb shell settings put system font_scale 1.0
+      - name: Collect emulator diagnostics
+        if: always()
+        run: |
+          if adb get-state >/dev/null 2>&1; then
+            adb logcat -d -s AndroidRuntime > evidence/android-runtime.txt
+            adb pull /sdcard/Android/data/dev.mitin.app.demo/files/screenshots evidence/screenshots-last || true
+            adb emu kill || true
+          fi
+      - name: Preserve APK, screenshots and reports
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: mitin-dev-android-${{ github.event.pull_request.head.sha }}
+          path: |
+            mitin-dev-android/evidence/
+            mitin-dev-android/app/build/reports/
+            mitin-dev-android/app/build/outputs/androidTest-results/
+          if-no-files-found: error
+          retention-days: 14
