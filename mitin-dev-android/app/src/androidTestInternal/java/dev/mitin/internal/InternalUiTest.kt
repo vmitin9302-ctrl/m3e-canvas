@@ -1,6 +1,7 @@
 package dev.mitin.internal
 
 import androidx.compose.ui.test.*
+import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
@@ -60,6 +61,7 @@ class InternalUiTest {
         assertNotNull(manager.state.value.profile)
         shot("04-session-revoked")
         tap("logout-all");tap("confirm-logout-all");waitFor("login-email")
+        assertEquals("Все сессии отозваны на сервере.", manager.state.value.message)
         shot("05-server-logout-all")
         device.pressBack();device.executeShellCommand("am start -n dev.mitin.app.internal/dev.mitin.internal.InternalActivity")
         waitFor("login-email")
@@ -78,7 +80,7 @@ class InternalUiTest {
         device.pressBack()
         ui.waitUntil(10_000){ ViewCompat.getRootWindowInsets(ui.activity.window.decorView)?.isVisible(WindowInsetsCompat.Type.ime())==false }
         ui.activityRule.scenario.recreate();waitFor("login-password")
-        ui.onNodeWithTag("login-password").assertTextEquals("")
+        assertEquals("", ui.onNodeWithTag("login-password").fetchSemanticsNode().config[SemanticsProperties.EditableText].text)
         shot("10-recreated-login-no-password")
     }
 }
