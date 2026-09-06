@@ -53,9 +53,11 @@ class DemoFlowTest {
         // instrumentation shell before cleanup; the shipped app gains no permission.
         device.executeShellCommand("mkdir -p /sdcard/Download/mitin-dev-demo")
         device.executeShellCommand("cp ${capture.absolutePath} /sdcard/Download/mitin-dev-demo/${capture.name}")
-        assertEquals("exported", device.executeShellCommand(
-            "test -s /sdcard/Download/mitin-dev-demo/${capture.name} && echo exported"
-        ).trim())
+        // executeShellCommand executes a command directly, without shell operators.
+        val exportedBytes = device.executeShellCommand(
+            "stat -c %s /sdcard/Download/mitin-dev-demo/${capture.name}"
+        ).trim().toLong()
+        assertEquals(capture.length(), exportedBytes)
     }
     private fun chooseOwner() { top("demo-menu"); tap("choose-owner") }
     private fun chooseClientHome() { top("demo-menu"); tap("choose-client"); tap("demo-login"); tap("open-home") }
