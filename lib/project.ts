@@ -13,9 +13,17 @@ const validTabs = (tabs: unknown) =>
 
 const validCorners = (c: unknown) => c === undefined || (isRecord(c) && ["tl", "tr", "bl", "br"].every((k) => Number.isFinite(c[k])));
 
+const validPreview = (p: unknown) => p === undefined || (isRecord(p) &&
+  (p.key === undefined || typeof p.key === "string") &&
+  (p.initial === undefined || typeof p.initial === "string") &&
+  (p.text === undefined || (isRecord(p.text) && ["label", "supporting"].every(k => p.text && ((p.text as Record<string, unknown>)[k] === undefined || typeof (p.text as Record<string, unknown>)[k] === "string")))) &&
+  (p.set === undefined || (isRecord(p.set) && Object.values(p.set).every(v => typeof v === "string"))) &&
+  (p.when === undefined || (isRecord(p.when) && typeof p.when.key === "string" && typeof p.when.equals === "string")));
+
 const validItem = (item: unknown) =>
   isRecord(item) &&
   validCorners(item.corners) &&
+  validPreview(item.preview) &&
   typeof item.id === "string" &&
   typeof item.kind === "string" &&
   KINDS.has(item.kind as Kind) &&

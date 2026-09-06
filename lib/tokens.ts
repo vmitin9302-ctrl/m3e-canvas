@@ -1178,6 +1178,14 @@ export type Item = {
   actions?: Record<string, Action>;
   /** the look a toggle button takes once tapped; undefined = not a toggle */
   toggle?: ToggleLook;
+  /** Optional, memory-only prototype bindings. Never execute code or send requests. */
+  preview?: {
+    key?: string;
+    initial?: string;
+    text?: { label?: string; supporting?: string };
+    set?: Record<string, string>;
+    when?: { key: string; equals: string };
+  };
 };
 
 export type ToggleLook = { icon?: string | null; variant?: Variant; label?: string };
