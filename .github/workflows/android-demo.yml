@@ -60,12 +60,32 @@ jobs:
           sudo apt-get update -qq
           sudo apt-get install -y --no-install-recommends libpulse0
           sudo chmod 666 /dev/kvm
+          export ANDROID_AVD_HOME="$RUNNER_TEMP/mitin-dev-avd"
+          export ANDROID_USER_HOME="$RUNNER_TEMP/mitin-dev-android-user"
+          mkdir -p "$ANDROID_AVD_HOME" "$ANDROID_USER_HOME"
+          echo "ANDROID_AVD_HOME=$ANDROID_AVD_HOME" >> "$GITHUB_ENV"
+          echo "ANDROID_USER_HOME=$ANDROID_USER_HOME" >> "$GITHUB_ENV"
           "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" 'system-images;android-35;google_apis;x86_64' 'emulator' > evidence/sdk-install.txt
-          echo no | "$ANDROID_HOME/cmdline-tools/latest/bin/avdmanager" create avd --force --name mitin-demo --package 'system-images;android-35;google_apis;x86_64' --device pixel_6
+          echo no | "$ANDROID_HOME/cmdline-tools/latest/bin/avdmanager" create avd --force --name mitin-demo --package 'system-images;android-35;google_apis;x86_64' --device pixel_6 --path "$ANDROID_AVD_HOME/mitin-demo.avd"
           "$ANDROID_HOME/emulator/emulator" -version > evidence/emulator-version.txt
+          "$ANDROID_HOME/emulator/emulator" -list-avds | tee evidence/avd-list.txt
+          grep -Fx 'mitin-demo' evidence/avd-list.txt
+          adb start-server
           nohup "$ANDROID_HOME/emulator/emulator" -avd mitin-demo -no-window -no-audio -no-boot-anim -no-snapshot -gpu swiftshader_indirect -camera-back none -camera-front none > evidence/emulator.log 2>&1 &
-          timeout 240 adb wait-for-device
-          timeout 240 bash -c 'until [ "$(adb shell getprop sys.boot_completed | tr -d "\r")" = 1 ]; do sleep 2; done'
+          demo_emulator_pid=$!
+          demo_boot_complete=false
+          for ((attempt=0; attempt<150; attempt++)); do
+            if ! kill -0 "$demo_emulator_pid" 2>/dev/null; then
+              tail -80 evidence/emulator.log
+              exit 1
+            fi
+            if [ "$(adb shell getprop sys.boot_completed 2>/dev/null | tr -d '\r')" = 1 ]; then
+              demo_boot_complete=true
+              break
+            fi
+            sleep 2
+          done
+          test "$demo_boot_complete" = true
           adb shell input keyevent 82
           adb shell settings put global window_animation_scale 0
           adb shell settings put global transition_animation_scale 0
