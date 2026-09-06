@@ -19,8 +19,10 @@ class NetworkE2ETest {
     private val context get() = InstrumentationRegistry.getInstrumentation().targetContext
     private fun api(port: Int = 8443) = HttpAuthApi("https://localhost:$port/")
     private class CountingApi(val remote: AuthApi) : AuthApi by remote {
-        var refreshes=0; var callsStarted=CompletableDeferred<Unit>()
-        override suspend fun refresh(token: Secret, epoch: Long): TokenPair { refreshes++; callsStarted.complete(Unit); return remote.refresh(token,epoch) }
+        private val count=java.util.concurrent.atomic.AtomicInteger()
+        val refreshes get()=count.get()
+        var callsStarted=CompletableDeferred<Unit>()
+        override suspend fun refresh(token: Secret, epoch: Long): TokenPair { count.incrementAndGet(); callsStarted.complete(Unit); return remote.refresh(token,epoch) }
     }
     private suspend fun scenario(port: Int = 8443, action: suspend (SessionManager, CountingApi, KeystoreRefreshStore) -> Unit) {
         assertTrue(BuildConfig.API_BASE_URL == "https://localhost:8443/")

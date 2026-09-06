@@ -43,7 +43,12 @@ class KeystoreRefreshStore(context: Context, namespace: String = "auth") : Refre
             put("ciphertext", Base64.encodeToString(encrypted, Base64.NO_WRAP))
         }.toString().toByteArray(Charsets.UTF_8)
         val output = file.startWrite()
-        try { output.write(blob); file.finishWrite(output) }
+        try {
+            output.write(blob); file.finishWrite(output)
+            // AtomicFile can log a failed rename without throwing on some API levels.
+            // Confirm the committed ciphertext before making the new pair usable.
+            if (!file.readFully().contentEquals(blob)) throw AuthFailure()
+        }
         catch (_: Exception) { file.failWrite(output); wipe(); throw AuthFailure() }
     }
     override suspend fun read(): StoredSession? = withContext(Dispatchers.IO) {

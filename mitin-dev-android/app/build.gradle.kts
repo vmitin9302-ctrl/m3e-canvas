@@ -85,7 +85,7 @@ abstract class PrepareInternalCa : DefaultTask() {
 }
 val prepareInternalCa = tasks.register<PrepareInternalCa>("prepareInternalCa") {
     certificate.set(layout.file(providers.gradleProperty("mitinCaPem").map { file(it) }
-        .orElse(provider { file("src/internal/res/raw/unconfigured_ca.pem") })))
+        .orElse(provider { file("config/unconfigured-ca.pem") })))
     outputDirectory.set(layout.buildDirectory.dir("generated/internalCa"))
 }
 androidComponents.onVariants(androidComponents.selector().withFlavor("environment" to "internal")) { variant ->
@@ -97,8 +97,8 @@ tasks.register("writeDependencyInventory") {
     doLast {
         val coordinates = configurations.filter { it.isCanBeResolved && it.name.endsWith("RuntimeClasspath") }
             .flatMap { it.incoming.resolutionResult.allComponents }
-            .mapNotNull { it.moduleVersion?.let { v -> "${v.group}:${v.name}:${v.version}" } }
-            .filterNot { it.startsWith("dev.mitin") || it.startsWith(":") }.distinct().sorted()
+            .mapNotNull { (it.id as? org.gradle.api.artifacts.component.ModuleComponentIdentifier)?.let { v -> "${v.group}:${v.module}:${v.version}" } }
+            .distinct().sorted()
         layout.buildDirectory.file("reports/dependency-coordinates.txt").get().asFile.apply { parentFile.mkdirs(); writeText(coordinates.joinToString("\n")) }
     }
 }

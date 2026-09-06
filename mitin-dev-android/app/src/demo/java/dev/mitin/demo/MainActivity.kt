@@ -158,8 +158,6 @@ class MainActivity : ComponentActivity() {
                         }
                         "c-welcome" -> {
                             BrandHero("СОЗДАЁМ DIGITAL-ПРОДУКТЫ")
-                            Eyebrow("От идеи до работающего продукта")
-                            Heading("MITIN DEV")
                             Text("Сайты, боты и digital-системы для бизнеса.", style = MaterialTheme.typography.headlineSmall)
                             Spacer(Modifier.height(12.dp))
                             InfoCard("Ваш проект — рядом", "Заявка, этапы и решения в одном месте. Здесь можно пройти весь путь на демоданных.", true)
