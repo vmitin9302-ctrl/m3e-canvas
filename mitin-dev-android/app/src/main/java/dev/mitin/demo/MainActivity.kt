@@ -404,7 +404,14 @@ class MainActivity : ComponentActivity() {
     if (showReset) AlertDialog(onDismissRequest = { showReset = false }, title = { Text("Сбросить демо?") },
         text = { Text("Локальные заявки, проекты, решения и сообщения будут заменены исходным вымышленным примером.") },
         confirmButton = { TextButton(onClick = {
-            vm.act { it.reset(); selectedProjectId = 1; selectedLeadId = 1045; showReset = false; root("c-welcome"); roleName = DemoRole.CLIENT.name }
+            vm.act {
+                it.reset()
+                selectedProjectId = 1; selectedLeadId = 1045
+                type = "Сайт"; task = Brief().task; features = Brief().features
+                budgetName = BudgetRange.FROM_20_40.name; deadline = Brief().deadline
+                integrations = Brief().integrations; comments = ""; feedback = ""; message = ""
+                leadFilter = "Все"; showReset = false; root("c-welcome"); roleName = DemoRole.CLIENT.name
+            }
         }) { Text("Сбросить") } }, dismissButton = { TextButton(onClick = { showReset = false }) { Text("Отмена") } })
     vm.error?.let { error -> AlertDialog(onDismissRequest = { vm.dismissError() }, title = { Text("Локальное хранилище") },
         text = { Text(error) }, confirmButton = { TextButton(onClick = { vm.dismissError() }) { Text("Понятно") } }) }

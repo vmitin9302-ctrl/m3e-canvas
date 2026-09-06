@@ -4,7 +4,7 @@
 
 ## Сборка
 
-JDK 17, Gradle 8.13 (wrapper + SHA-256), AGP 8.13.2, Kotlin/Compose compiler 2.2.20, Compose BOM 2025.10.01, Material 3 Expressive. `compileSdk/targetSdk=36`, `minSdk=26` (Android 8.0). Зависимости закреплены в Gradle, динамических версий нет. Release variant отключён; доступен только `demoDebug`.
+JDK 17, Gradle 8.13 (wrapper + SHA-256), AGP 8.13.2, Kotlin/Compose compiler 2.2.20, Compose BOM 2025.10.01, Material 3 Expressive 1.5.0-alpha07 (явно закреплён: в stable 1.4 Expressive API ещё internal). `compileSdk/targetSdk=36`, `minSdk=26` (Android 8.0). Зависимости закреплены в Gradle, динамических версий нет. Release variant отключён; доступен только `demoDebug`.
 
 ```sh
 ./gradlew --no-daemon assembleDemoDebug testDemoDebugUnitTest lintDemoDebug
