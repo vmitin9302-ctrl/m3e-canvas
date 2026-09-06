@@ -65,6 +65,9 @@ class HttpAuthApi(baseUrl: String, private val client: OkHttpClient = secureClie
         }
         fun secureClient() = OkHttpClient.Builder()
             .connectTimeout(8, TimeUnit.SECONDS).readTimeout(12, TimeUnit.SECONDS).callTimeout(20, TimeUnit.SECONDS)
+            // Auth has strict no-retry semantics. Do not retain idle sockets that
+            // the server may close while the app is backgrounded or a form is edited.
+            .connectionPool(ConnectionPool(0, 1, TimeUnit.SECONDS))
             .retryOnConnectionFailure(false).followRedirects(false).followSslRedirects(false)
             .authenticator(Authenticator.NONE).proxyAuthenticator(Authenticator.NONE)
             .cookieJar(CookieJar.NO_COOKIES).cache(null)

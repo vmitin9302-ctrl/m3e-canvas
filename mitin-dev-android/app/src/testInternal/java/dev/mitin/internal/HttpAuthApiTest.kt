@@ -65,6 +65,17 @@ class HttpAuthApiTest {
         assertTrue(runCatching { api.login("synthetic@example.com",Secret("synthetic-password"),1) }.isFailure)
         assertEquals(1,server.requestCount)
     } }
+    @Test fun sequentialAuthCallsDoNotReuseIdleTlsConnections() = tls { server,api -> runBlocking {
+        server.enqueue(response(me));server.enqueue(response(me))
+        api.me(Secret("synthetic-access"),1)
+        assertEquals(0,server.takeRequest().sequenceNumber)
+        // The peer offers keep-alive. Once the first call is released, the next
+        // call must establish a fresh verified TLS connection, not retry a stale one.
+        kotlinx.coroutines.delay(100)
+        api.me(Secret("synthetic-access"),1)
+        assertEquals(0,server.takeRequest().sequenceNumber)
+        assertEquals(2,server.requestCount)
+    } }
     @Test fun unsafeOriginsRejectedBeforeAnyConnection() {
         for(url in listOf("http://localhost:8443/","https://example.com/","https://localhost/path","https://user:password@localhost/","https://localhost/?token=value"))
             assertTrue(runCatching { HttpAuthApi(url) }.isFailure)
