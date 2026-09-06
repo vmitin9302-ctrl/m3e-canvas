@@ -47,7 +47,15 @@ class DemoFlowTest {
     private fun shot(name: String) {
         ui.waitForIdle(); device.waitForIdle()
         val folder = File(context.getExternalFilesDir(null), "screenshots").apply { mkdirs() }
-        assertTrue(device.takeScreenshot(File(folder, "${if (large) "large-" else ""}$name.png")))
+        val capture = File(folder, "${if (large) "large-" else ""}$name.png")
+        assertTrue(device.takeScreenshot(capture))
+        // UTP uninstalls the app after a run. Export synthetic screenshots with the
+        // instrumentation shell before cleanup; the shipped app gains no permission.
+        device.executeShellCommand("mkdir -p /sdcard/Download/mitin-dev-demo")
+        device.executeShellCommand("cp ${capture.absolutePath} /sdcard/Download/mitin-dev-demo/${capture.name}")
+        assertEquals("exported", device.executeShellCommand(
+            "test -s /sdcard/Download/mitin-dev-demo/${capture.name} && echo exported"
+        ).trim())
     }
     private fun chooseOwner() { top("demo-menu"); tap("choose-owner") }
     private fun chooseClientHome() { top("demo-menu"); tap("choose-client"); tap("demo-login"); tap("open-home") }

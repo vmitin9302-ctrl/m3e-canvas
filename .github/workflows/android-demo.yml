@@ -37,6 +37,11 @@ jobs:
       - name: Verify source and Gradle wrapper
         run: |
           mkdir -p evidence
+          export ANDROID_AVD_HOME="$RUNNER_TEMP/mitin-dev-avd"
+          export ANDROID_USER_HOME="$RUNNER_TEMP/mitin-dev-android-user"
+          mkdir -p "$ANDROID_AVD_HOME" "$ANDROID_USER_HOME"
+          echo "ANDROID_AVD_HOME=$ANDROID_AVD_HOME" >> "$GITHUB_ENV"
+          echo "ANDROID_USER_HOME=$ANDROID_USER_HOME" >> "$GITHUB_ENV"
           git rev-parse HEAD | tee evidence/commit.txt
           java -version 2> evidence/java-version.txt
           "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" 'platform-tools' > evidence/platform-tools-install.txt
@@ -60,11 +65,6 @@ jobs:
           sudo apt-get update -qq
           sudo apt-get install -y --no-install-recommends libpulse0
           sudo chmod 666 /dev/kvm
-          export ANDROID_AVD_HOME="$RUNNER_TEMP/mitin-dev-avd"
-          export ANDROID_USER_HOME="$RUNNER_TEMP/mitin-dev-android-user"
-          mkdir -p "$ANDROID_AVD_HOME" "$ANDROID_USER_HOME"
-          echo "ANDROID_AVD_HOME=$ANDROID_AVD_HOME" >> "$GITHUB_ENV"
-          echo "ANDROID_USER_HOME=$ANDROID_USER_HOME" >> "$GITHUB_ENV"
           "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" 'system-images;android-35;google_apis;x86_64' 'emulator' > evidence/sdk-install.txt
           echo no | "$ANDROID_HOME/cmdline-tools/latest/bin/avdmanager" create avd --force --name mitin-demo --package 'system-images;android-35;google_apis;x86_64' --device pixel_6 --path "$ANDROID_AVD_HOME/mitin-demo.avd"
           "$ANDROID_HOME/emulator/emulator" -version > evidence/emulator-version.txt
@@ -102,22 +102,24 @@ jobs:
       - name: Offline journeys, keyboard, Back and recreation
         run: |
           timeout 600 ./gradlew --no-daemon --console=plain connectedDemoDebugAndroidTest 2>&1 | tee evidence/instrumentation-normal.txt
+          cmp app/build/outputs/apk/demo/debug/app-demo-debug.apk evidence/MITIN-DEV-demoDebug.apk
           cp -R app/build/outputs/androidTest-results evidence/android-tests-normal
-          adb pull /sdcard/Android/data/dev.mitin.app.demo/files/screenshots evidence/screenshots-normal
+          adb pull /sdcard/Download/mitin-dev-demo evidence/screenshots-normal
       - name: Repeat journeys with 160 percent system font
         run: |
           adb shell settings put system font_scale 1.6
           adb shell am force-stop dev.mitin.app.demo
           timeout 600 ./gradlew --no-daemon --console=plain connectedDemoDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.largeFont=true 2>&1 | tee evidence/instrumentation-large-font.txt
+          cmp app/build/outputs/apk/demo/debug/app-demo-debug.apk evidence/MITIN-DEV-demoDebug.apk
           cp -R app/build/outputs/androidTest-results evidence/android-tests-large-font
-          adb pull /sdcard/Android/data/dev.mitin.app.demo/files/screenshots evidence/screenshots-large-font
+          adb pull /sdcard/Download/mitin-dev-demo evidence/screenshots-large-font
           adb shell settings put system font_scale 1.0
       - name: Collect emulator diagnostics
         if: always()
         run: |
           if adb get-state >/dev/null 2>&1; then
             adb logcat -d -s AndroidRuntime > evidence/android-runtime.txt
-            adb pull /sdcard/Android/data/dev.mitin.app.demo/files/screenshots evidence/screenshots-last || true
+            adb pull /sdcard/Download/mitin-dev-demo evidence/screenshots-last || true
             adb emu kill || true
           fi
       - name: Preserve APK, screenshots and reports
