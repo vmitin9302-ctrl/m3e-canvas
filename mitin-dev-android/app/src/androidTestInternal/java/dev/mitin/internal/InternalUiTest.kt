@@ -54,7 +54,8 @@ class InternalUiTest {
         // A second independent real server session is created outside this app manager.
         runBlocking { HttpAuthApi("https://localhost:8443/").login(CLIENT_A,Secret(TEST_PASSWORD),701) }
         tap("open-sessions");waitFor("session-0");shot("03-real-sessions")
-        tap("revoke-0");tap("confirm-revoke");ui.waitForIdle()
+        tap("revoke-0");tap("confirm-revoke")
+        ui.waitUntil(30_000) { ui.onAllNodes(hasText("Отозвана:", substring=true)).fetchSemanticsNodes().isNotEmpty() }
         // Most recently created second session is item 0; current app stays signed in.
         assertNotNull(manager.state.value.profile)
         shot("04-session-revoked")
