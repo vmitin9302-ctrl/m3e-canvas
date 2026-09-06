@@ -46,10 +46,15 @@ class SessionManager(
         mutable.value = AuthState(restoring = false, message = message)
         store.clear()
     }
-    private suspend fun persistPairLocked(pair: TokenPair): AccessLease {
+    private suspend fun persistPairLocked(pair: TokenPair, requestStartedAt: Long): AccessLease {
         store.save(pair.refresh) // atomic encrypted save BEFORE publication/use
         generation++
-        credentials = Credentials(pair.access, pair.refresh, now() + pair.expiresIn * 1000L)
+        // Server NumericDate is rounded to seconds; transport/storage also consume
+        // lifetime. Never extend validity from the time a response reaches us.
+        // Renew conservatively before a mutation, without replaying that mutation.
+        val ttl = pair.expiresIn * 1000L
+        val margin = minOf(5_000L, ttl / 4)
+        credentials = Credentials(pair.access, pair.refresh, requestStartedAt + ttl - margin)
         return AccessLease(epoch, generation, pair.access)
     }
     suspend fun restore() {
@@ -80,10 +85,11 @@ class SessionManager(
         // in application scope, and an account change invalidates its epoch.
         return operations.async {
             try {
+                val requestStartedAt = now()
                 val pair = api.login(email, password, start)
                 mutex.withLock {
                     if (epoch != start) throw Superseded()
-                    persistPairLocked(pair)
+                    persistPairLocked(pair, requestStartedAt)
                 }
                 loadMe()
             } catch (failure: Exception) {
@@ -98,10 +104,11 @@ class SessionManager(
                 if (epoch != start) throw Superseded()
                 store.beginExchange()
             }
+            val requestStartedAt = now()
             val pair = api.refresh(raw, start) // EXACTLY ONE attempt; ambiguous outcome requires login.
             return mutex.withLock {
                 if (epoch != start) throw Superseded()
-                persistPairLocked(pair)
+                persistPairLocked(pair, requestStartedAt)
             }
         } catch (failure: Exception) {
             withContext(NonCancellable) {

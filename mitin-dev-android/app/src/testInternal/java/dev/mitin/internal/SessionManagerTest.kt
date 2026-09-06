@@ -23,8 +23,9 @@ class SessionManagerTest {
         var late = false
         var meHandler: (suspend (Secret) -> Me)? = null
         var account = "A"
+        var beforeLoginResponse: () -> Unit = {}
         fun pair() = TokenPair(Secret(account.repeat(200)), Secret("mdr1_" + ('a' + rotations).toString().repeat(43)), 10)
-        override suspend fun login(email: String, password: Secret, epoch: Long): TokenPair { account = email; logins++; return pair() }
+        override suspend fun login(email: String, password: Secret, epoch: Long): TokenPair { account = email; logins++; beforeLoginResponse(); return pair() }
         override suspend fun refresh(token: Secret, epoch: Long): TokenPair {
             rotations++; started.complete(Unit)
             if (late) withContext(NonCancellable) { gate?.await() } else gate?.await()
@@ -55,6 +56,18 @@ class SessionManagerTest {
         runCurrent(); assertEquals(1,f.api.rotations); assertTrue(f.store.record!!.exchanging)
         f.api.gate!!.complete(Unit); jobs.awaitAll()
         assertEquals(1,f.api.rotations); assertFalse(f.store.record!!.exchanging)
+    }
+    @Test fun logoutAllRenewsBeforeExpiryWithoutReplayingMutation() = runTest {
+        val f=Fixture(backgroundScope); f.login(); f.clock=8_000
+        assertTrue(f.manager.logout(true).serverRevoked)
+        assertEquals(1,f.api.rotations); assertEquals(1,f.api.logoutCalls)
+    }
+    @Test fun responseTransitDoesNotExtendAccessLifetime() = runTest {
+        val f=Fixture(backgroundScope)
+        f.api.beforeLoginResponse={f.clock=4_000}
+        f.login(); f.clock=8_000
+        f.manager.loadMe()
+        assertEquals(1,f.api.rotations)
     }
     @Test fun cancellationOfOneWaiterDoesNotCancelRefresh() = runTest {
         val f=Fixture(backgroundScope); f.login(); f.clock=11_000; f.api.gate=CompletableDeferred()

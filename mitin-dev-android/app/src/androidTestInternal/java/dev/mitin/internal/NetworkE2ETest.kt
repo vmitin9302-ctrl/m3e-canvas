@@ -64,7 +64,7 @@ class NetworkE2ETest {
     @Test fun expiredAccessUsesOneRealRotationForSixRequests() = runBlocking {
         scenario { manager,remote,_ ->
             manager.login(CLIENT_A,Secret(TEST_PASSWORD))
-            delay(4500) // Actual backend TTL is 4 seconds in this isolated E2E.
+            delay(15_500) // Actual backend TTL is 15 seconds in this isolated E2E.
             coroutineScope { List(6){async { manager.loadMe() }}.awaitAll() }
             assertEquals(1,remote.refreshes)
             assertEquals("Тестовый клиент А",manager.state.value.profile?.displayName)
@@ -72,7 +72,7 @@ class NetworkE2ETest {
     }
     @Test fun lostCommittedRefreshResponseRequiresLoginAndNoReplay() = runBlocking {
         scenario(8444) { manager,remote,store ->
-            manager.login(CLIENT_A,Secret(TEST_PASSWORD));delay(4500)
+            manager.login(CLIENT_A,Secret(TEST_PASSWORD));delay(15_500)
             assertTrue(runCatching { manager.loadMe() }.isFailure)
             assertNull(manager.state.value.profile);assertNull(store.read())
             manager.restore();assertEquals(1,remote.refreshes)
@@ -80,7 +80,7 @@ class NetworkE2ETest {
     }
     @Test fun logoutWhileCommittedResponseIsDelayedCannotRestoreAccess() = runBlocking {
         scenario(8445) { manager,remote,store ->
-            manager.login(CLIENT_A,Secret(TEST_PASSWORD));delay(4500)
+            manager.login(CLIENT_A,Secret(TEST_PASSWORD));delay(15_500)
             val refresh=async { runCatching { manager.loadMe() } }
             remote.callsStarted.await();delay(500)
             manager.logout();refresh.await();delay(3200)

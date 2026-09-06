@@ -66,15 +66,24 @@ class InternalUiTest {
         tap("logout-all");tap("confirm-logout-all");waitFor("login-email")
         assertEquals("Все сессии отозваны на сервере.", manager.state.value.message)
         shot("05-server-logout-all")
-        val closedActivity=ui.activity
+        val previousActivity=ui.activity
         device.pressBack()
-        ui.waitUntil(30_000) { closedActivity.isDestroyed }
-        device.executeShellCommand("am start -W -n dev.mitin.app.internal/dev.mitin.internal.InternalActivity")
+        // Android 12+ backgrounds a launcher root on Back; older versions finish it.
+        // Observe either real lifecycle result, then reopen as a launcher would.
+        ui.waitUntil(30_000) {
+            var backgrounded=false
+            InstrumentationRegistry.getInstrumentation().runOnMainSync {
+                val stage=ActivityLifecycleMonitorRegistry.getInstance().getLifecycleStageOf(previousActivity)
+                backgrounded=stage==Stage.STOPPED || stage==Stage.DESTROYED
+            }
+            backgrounded
+        }
+        device.executeShellCommand("am start -W -a android.intent.action.MAIN -c android.intent.category.LAUNCHER -f 0x10200000 -n dev.mitin.app.internal/dev.mitin.internal.InternalActivity")
         ui.waitUntil(30_000) {
             var resumed=false
             InstrumentationRegistry.getInstrumentation().runOnMainSync {
                 resumed=ActivityLifecycleMonitorRegistry.getInstance().getActivitiesInStage(Stage.RESUMED)
-                    .any { it is InternalActivity && it !== closedActivity && !it.isFinishing }
+                    .any { it is InternalActivity && !it.isFinishing }
             }
             resumed
         }
