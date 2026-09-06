@@ -72,22 +72,25 @@ dependencies {
 }
 
 // The private harness supplies only its PUBLIC CA certificate. No key is embedded.
-val generatedCa = layout.buildDirectory.dir("generated/internalCa")
-val prepareInternalCa by tasks.registering {
-    val source = providers.gradleProperty("mitinCaPem")
-    inputs.property("certificatePath", source.orElse(""))
-    if (source.isPresent) inputs.file(source)
-    outputs.dir(generatedCa)
-    doLast {
-        val target = generatedCa.get().file("raw/mitin_test_ca.pem").asFile
-        target.parentFile.mkdirs()
-        val pem = if (source.isPresent) file(source.get()).readText() else file("src/internal/res/raw/unconfigured_ca.pem").readText()
+abstract class PrepareInternalCa : DefaultTask() {
+    @get:InputFile abstract val certificate: RegularFileProperty
+    @get:OutputDirectory abstract val outputDirectory: DirectoryProperty
+    @TaskAction fun generate() {
+        val pem = certificate.get().asFile.readText()
         require(pem.contains("BEGIN CERTIFICATE") && !pem.contains("PRIVATE KEY"))
+        val target = outputDirectory.get().file("raw/mitin_test_ca.pem").asFile
+        target.parentFile.mkdirs()
         target.writeText(pem)
     }
 }
-android.sourceSets.getByName("internal").res.srcDir(generatedCa)
-tasks.configureEach { if (name.startsWith("mergeInternal") || name.startsWith("generateInternal") || name.startsWith("lint")) dependsOn(prepareInternalCa) }
+val prepareInternalCa = tasks.register<PrepareInternalCa>("prepareInternalCa") {
+    certificate.set(layout.file(providers.gradleProperty("mitinCaPem").map { file(it) }
+        .orElse(provider { file("src/internal/res/raw/unconfigured_ca.pem") })))
+    outputDirectory.set(layout.buildDirectory.dir("generated/internalCa"))
+}
+androidComponents.onVariants(androidComponents.selector().withFlavor("environment" to "internal")) { variant ->
+    variant.sources.res?.addGeneratedSourceDirectory(prepareInternalCa) { it.outputDirectory }
+}
 
 // Dependency inventory for the isolated OSV audit (no credentials, no build cache).
 tasks.register("writeDependencyInventory") {
