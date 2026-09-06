@@ -125,6 +125,15 @@ class SessionManagerTest {
             assertEquals(0,f.api.rotations); assertEquals(2,f.api.meCalls)
         }
     }
+    @Test fun failedExchangeDoesNotCancelIndependentNextLogin() = runTest {
+        val f=Fixture(backgroundScope); f.login(); f.clock=11_000; f.api.failRefresh=true
+        assertTrue(runCatching { f.manager.loadMe() }.isFailure)
+        assertNull(f.store.record); assertNull(f.manager.state.value.profile)
+        f.api.failRefresh=false
+        f.manager.login("B", Secret("synthetic-password-only"))
+        assertEquals("B", f.manager.state.value.profile?.displayName)
+        assertEquals(2, f.api.logins)
+    }
     @Test fun secretDiagnosticsAreRedacted() {
         val value="synthetic-marker-never-log"
         assertFalse(Secret(value).toString().contains(value))

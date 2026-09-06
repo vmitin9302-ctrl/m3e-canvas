@@ -22,9 +22,12 @@ data class LogoutResult(val serverRevoked: Boolean)
 class SessionManager(
     private val api: AuthApi,
     private val store: RefreshStore,
-    private val scope: CoroutineScope,
+    scope: CoroutineScope,
     private val now: () -> Long = { System.nanoTime() / 1_000_000 },
 ) {
+    // Independent account operations cannot cancel the application's parent job.
+    // Awaiters still receive every failure; parent cancellation still cancels us.
+    private val operations = CoroutineScope(scope.coroutineContext + SupervisorJob(scope.coroutineContext[Job]))
     private val mutex = Mutex()
     private var epoch = 0L
     private var generation = 0L
@@ -75,7 +78,7 @@ class SessionManager(
         val start = mutex.withLock { clearLocked(); epoch }
         // Screen cancellation does not retry login. The single operation continues
         // in application scope, and an account change invalidates its epoch.
-        return scope.async {
+        return operations.async {
             try {
                 val pair = api.login(email, password, start)
                 mutex.withLock {
@@ -125,7 +128,7 @@ class SessionManager(
             }
             exchange ?: run {
                 val start = epoch
-                scope.async(start = CoroutineStart.LAZY) { rotate(start, current.refresh) }.also {
+                operations.async(start = CoroutineStart.LAZY) { rotate(start, current.refresh) }.also {
                     exchange = it; it.start()
                 }
             }
