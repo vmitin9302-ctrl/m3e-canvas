@@ -17,6 +17,8 @@ import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 import java.io.File
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
 
 @RunWith(AndroidJUnit4::class)
 class InternalUiTest {
@@ -36,7 +38,21 @@ class InternalUiTest {
     }
     private fun waitFor(tag:String) {ui.waitUntil(30_000){ui.onAllNodesWithTag(tag).fetchSemanticsNodes().isNotEmpty()}}
     private fun shot(name:String) {
-        ui.waitForIdle();device.waitForIdle()
+        ui.waitForIdle()
+        // Semantics can be ready one rendered frame before SurfaceFlinger. Wait
+        // for the actual app frame so screenshots show the asserted server state.
+        val drawn=CountDownLatch(1)
+        InstrumentationRegistry.getInstrumentation().runOnMainSync {
+            val activity=ActivityLifecycleMonitorRegistry.getInstance().getActivitiesInStage(Stage.RESUMED)
+                .filterIsInstance<InternalActivity>().single()
+            val decor=activity.window.decorView
+            if(android.os.Build.VERSION.SDK_INT>=29 && decor.isHardwareAccelerated) {
+                decor.viewTreeObserver.registerFrameCommitCallback { drawn.countDown() }
+                decor.invalidate()
+            } else decor.postOnAnimation { drawn.countDown() }
+        }
+        assertTrue("App frame was not rendered",drawn.await(10,TimeUnit.SECONDS))
+        device.waitForIdle()
         val dir=File(context.getExternalFilesDir(null),"network-shots").apply{mkdirs()}
         val file=File(dir,"${if(large) "large-" else ""}$name.png")
         assertTrue(device.takeScreenshot(file))
@@ -86,7 +102,10 @@ class InternalUiTest {
         runBlocking { HttpAuthApi("https://localhost:8443/").login(CLIENT_A,Secret(TEST_PASSWORD),701) }
         tap("open-sessions");waitFor("session-0");shot("03-real-sessions")
         tap("revoke-0");tap("confirm-revoke")
-        ui.waitUntil(30_000) { ui.onAllNodes(hasText("Отозвана:", substring=true)).fetchSemanticsNodes().isNotEmpty() }
+        ui.waitUntil(30_000) {
+            ui.onAllNodes(hasTestTag("session-0") and (hasText("Отозвана:",substring=true) or
+                hasAnyDescendant(hasText("Отозвана:",substring=true)))).fetchSemanticsNodes().isNotEmpty()
+        }
         // Most recently created second session is item 0; current app stays signed in.
         assertNotNull(manager.state.value.profile)
         shot("04-session-revoked")
