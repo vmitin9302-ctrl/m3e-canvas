@@ -47,9 +47,36 @@ class InternalUiTest {
     private fun login(email:String) {
         waitFor("login-email")
         ui.onNodeWithTag("login-email").performScrollTo().performTextReplacement(email)
-        ui.onNodeWithTag("login-password").performScrollTo().performTextReplacement(TEST_PASSWORD)
+        ui.onNodeWithTag("login-password").performScrollTo().performClick().performTextReplacement(TEST_PASSWORD)
+        // Finish actual IME/inset transitions before scrolling to and physically
+        // tapping the button. After logout the status card makes this form longer.
+        ui.waitUntil(10_000) { imeVisible() }
+        device.pressBack()
+        ui.waitUntil(10_000) { !imeVisible() }
+        ui.onNodeWithTag("network-login").performScrollTo()
+        ui.waitForIdle()
+        ui.onNodeWithTag("network-login").assertIsDisplayed()
         ui.onNodeWithTag("network-login").assertIsEnabled()
-        tap("network-login");waitFor("server-profile")
+        tap("network-login")
+        try {
+            // onClick clears password before starting the real request. Do not
+            // print the field value or dump a secret-bearing semantics tree.
+            ui.waitUntil(5_000) {
+                val fields=ui.onAllNodesWithTag("login-password").fetchSemanticsNodes()
+                fields.isEmpty() || fields.single().config[SemanticsProperties.EditableText].text.isEmpty()
+            }
+        } catch (failure: Throwable) { shot("11-login-action-not-invoked"); throw failure }
+        try { waitFor("server-profile") }
+        catch (failure: Throwable) { shot("12-login-result-timeout"); throw failure }
+    }
+    private fun imeVisible():Boolean {
+        var visible=false
+        InstrumentationRegistry.getInstrumentation().runOnMainSync {
+            val activity=ActivityLifecycleMonitorRegistry.getInstance().getActivitiesInStage(Stage.RESUMED)
+                .filterIsInstance<InternalActivity>().singleOrNull()
+            visible=activity?.let { ViewCompat.getRootWindowInsets(it.window.decorView)?.isVisible(WindowInsetsCompat.Type.ime()) }==true
+        }
+        return visible
     }
     @Test fun realLoginProfileSessionsRevocationLogoutAllAndNewAccount() {
         if(large) assertTrue(context.resources.configuration.fontScale>=1.5f)
