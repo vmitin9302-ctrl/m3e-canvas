@@ -92,8 +92,10 @@ jobs:
           adb shell settings put global animator_duration_scale 0
           adb shell svc wifi disable
           adb shell svc data disable
-          adb shell settings put global airplane_mode_on 1
-          adb shell am broadcast -a android.intent.action.AIRPLANE_MODE --ez state true
+          test "$(adb shell settings get global wifi_on | tr -d '\r')" = 0
+          test "$(adb shell settings get global mobile_data | tr -d '\r')" = 0
+          adb shell settings get global wifi_on > evidence/wifi-state.txt
+          adb shell settings get global mobile_data > evidence/mobile-data-state.txt
           adb shell getprop ro.build.version.release > evidence/android-version.txt
           adb shell getprop ro.build.version.sdk >> evidence/android-version.txt
       - name: Offline journeys, keyboard, Back and recreation
