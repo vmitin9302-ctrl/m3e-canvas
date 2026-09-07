@@ -101,12 +101,18 @@ class BriefUiE2ETest {
         device.executeShellCommand("mkdir -p /sdcard/Download/mitin-network")
         device.executeShellCommand("cp ${file.absolutePath} /sdcard/Download/mitin-network/${file.name}")
     }
-    private fun waitFor(tag:String)=ui.waitUntil(60_000) {ui.onAllNodesWithTag(tag).fetchSemanticsNodes().isNotEmpty()}
+    private fun waitFor(tag:String) {
+        try { ui.waitUntil(60_000) {ui.onAllNodesWithTag(tag).fetchSemanticsNodes().isNotEmpty()} }
+        catch(failure: Throwable) { runCatching { shot("waiting-$tag") }; throw failure }
+    }
     private fun tap(tag:String) {
         waitFor(tag)
+        // Restored server state can render while its durable save is still in
+        // progress. A visible disabled control must not be treated as clickable.
+        ui.waitUntil(60_000) { ui.onAllNodes(hasTestTag(tag) and isEnabled()).fetchSemanticsNodes().isNotEmpty() }
         val node=ui.onNodeWithTag(tag)
         if(ui.onAllNodes(hasTestTag(tag) and hasAnyAncestor(hasScrollAction())).fetchSemanticsNodes().isNotEmpty()) node.performScrollTo()
-        node.performClick();ui.waitForIdle()
+        node.assertIsEnabled().performClick();ui.waitForIdle()
     }
     @Test fun portfolioBriefReviewContactConfirmAndRecreation() {
         val before=runBlocking(Dispatchers.IO) {count()}
@@ -116,8 +122,12 @@ class BriefUiE2ETest {
         tap("brief-send");waitFor("brief-finalize");tap("brief-finalize");waitFor("brief-to-contact")
         ui.onNodeWithTag("brief-final").performScrollTo();shot("final")
         val rotationDevice=UiDevice.getInstance(instrumentation)
-        rotationDevice.setOrientationLeft();ui.waitForIdle()
-        rotationDevice.setOrientationNatural();ui.waitForIdle()
+        rotationDevice.setOrientationLeft()
+        ui.waitUntil(30_000) { instrumentation.targetContext.resources.configuration.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE }
+        ui.waitForIdle()
+        rotationDevice.setOrientationNatural()
+        ui.waitUntil(30_000) { instrumentation.targetContext.resources.configuration.orientation == android.content.res.Configuration.ORIENTATION_PORTRAIT }
+        ui.waitForIdle()
         ui.activityRule.scenario.recreate();ui.waitForIdle();waitFor("brief-to-contact")
         tap("brief-to-contact");waitFor("brief-name")
         ui.onNodeWithTag("brief-name").performScrollTo().performTextInput("Синтетический клиент")
