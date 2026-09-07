@@ -11,8 +11,9 @@ import kotlinx.serialization.json.*
 import java.security.SecureRandom
 import java.util.UUID
 
-class BriefViewModel(app: Application) : AndroidViewModel(app) {
-    private val repository = BuildConfig.API_BASE_URL.takeIf { it.isNotBlank() }?.let { HttpBriefRepository(it) }
+class BriefViewModel @JvmOverloads constructor(app: Application, private val repository: BriefRepository? = BuildConfig.API_BASE_URL.takeIf { it.isNotBlank() }?.let { HttpBriefRepository(it) }) : AndroidViewModel(app) {
+    val capabilities get() = (getApplication<Application>() as InternalApplication).capabilities
+    val submissionAvailable get() = capabilities?.submission == true
     private val store = BriefStore(app)
     private var record: BriefRecord? = null
     var state by mutableStateOf<BriefState?>(null); private set
@@ -32,6 +33,8 @@ class BriefViewModel(app: Application) : AndroidViewModel(app) {
             catch(e: Exception) {
                 error = when ((e as? BriefFailure)?.status) {
                     0 -> "Нет соединения. Восстановите сеть и нажмите «Повторить»."
+                    403 -> "Отправка заявки пока не активирована. ТЗ сохранено на этом устройстве."
+                    401 -> "Сессия недоступна. Начните новый бриф."
                     404 -> "AI-бриф пока недоступен в этом окружении."
                     410 -> "Срок сессии или подтверждения истёк. Обновите данные или начните новый бриф."
                     409 -> "Состояние изменилось или AI ещё отвечает. Обновите сессию."
@@ -55,7 +58,7 @@ class BriefViewModel(app: Application) : AndroidViewModel(app) {
         else if(slug != state?.portfolio) error = "У вас уже есть бриф. Завершите его или начните новый, затем выберите кейс."
     }
     fun start(service: String, budget: String) = run {
-        if(repository == null) throw BriefFailure(404)
+        if(repository == null || capabilities?.ai != true) throw BriefFailure(404)
         val id = UUID.randomUUID().toString()
         val secret = Base64.encodeToString(ByteArray(32).also { SecureRandom().nextBytes(it) }, Base64.URL_SAFE or Base64.NO_WRAP or Base64.NO_PADDING)
         val body = buildJsonObject {
@@ -90,6 +93,7 @@ class BriefViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
     private fun command(path: String, extra: JsonObject = JsonObject(emptyMap())) = run {
+        if (path in setOf("prepare", "confirm") && !submissionAvailable) throw BriefFailure(403, "submission_disabled")
         val existing = record ?: return@run
         if(existing.pendingPath != null) { recover(existing); return@run }
         val value = state ?: return@run

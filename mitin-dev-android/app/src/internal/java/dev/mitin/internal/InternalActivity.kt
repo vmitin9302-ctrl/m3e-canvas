@@ -42,9 +42,10 @@ import dev.mitin.demo.*
 import kotlinx.coroutines.*
 
 class InternalApplication : Application() {
+    var capabilities by mutableStateOf<Capabilities?>(if (BuildConfig.FLAVOR == "production") null else Capabilities(true, true, true))
     private val authScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     val manager: SessionManager? by lazy {
-        if (BuildConfig.API_BASE_URL.isBlank()) null else SessionManager(
+        if (BuildConfig.API_BASE_URL.isBlank() || BuildConfig.FLAVOR == "production") null else SessionManager(
             HttpAuthApi(BuildConfig.API_BASE_URL), KeystoreRefreshStore(this), authScope
         )
     }
@@ -103,24 +104,28 @@ class InternalViewModel(app: Application) : AndroidViewModel(app) {
 }
 class InternalActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
-        installSplashScreen(); super.onCreate(savedInstanceState)
+        val splash = installSplashScreen(); super.onCreate(savedInstanceState)
+        splash.setOnExitAnimationListener { provider -> provider.view.animate().alpha(0f).setDuration(220).withEndAction { provider.remove() }.start() }
         enableEdgeToEdge(statusBarStyle = SystemBarStyle.dark(android.graphics.Color.TRANSPARENT),
             navigationBarStyle = SystemBarStyle.dark(android.graphics.Color.TRANSPARENT))
         setContent { MitinTheme { InternalApp() } }
     }
 }
 @Composable fun InternalApp(vm: InternalViewModel = viewModel()) {
+    val meta: MetaViewModel = viewModel()
+    if (meta.loading) { LaunchScreen(); return }
+    if (meta.failed) { LaunchScreen(failed = true, retry = meta::reload); return }
     val portfolio: PortfolioViewModel = viewModel()
     val brief: BriefViewModel = viewModel()
     val configured = vm.manager != null
     val auth = if (configured) vm.manager!!.state.collectAsStateWithLifecycle().value else AuthState(restoring = false)
-    var tab by rememberSaveable { mutableIntStateOf(2) }
+    var tab by rememberSaveable { mutableIntStateOf(if(BuildConfig.FLAVOR == "production") 0 else 2) }
     var showSessions by remember(auth.profile?.userId) { mutableStateOf(false) }
     var confirmAll by remember(auth.profile?.userId) { mutableStateOf(false) }
     var selected by remember(auth.profile?.userId) { mutableStateOf<RemoteSession?>(null) }
     val keyboard = LocalSoftwareKeyboardController.current
     BackHandler(enabled = showSessions || tab != 2) { showSessions = false; tab = 2; keyboard?.hide() }
-    if (auth.restoring) { BrandLoading(); return }
+    if (auth.restoring) { LaunchScreen(); return }
     Scaffold(Modifier.fillMaxSize().imePadding(), topBar = {
         Surface(color = MaterialTheme.colorScheme.surfaceContainer) {
             Row(Modifier.fillMaxWidth().statusBarsPadding().padding(16.dp), verticalAlignment = Alignment.CenterVertically,
@@ -140,6 +145,7 @@ class InternalActivity : ComponentActivity() {
                     when {
                         tab == 0 -> PortfolioScreen(portfolio) { brief.fromPortfolio(portfolio.selectedSlug, (portfolio.detail as? PortfolioState.Success<PortfolioItem>)?.value?.title); tab = 1 }
                         tab == 1 -> BriefScreen(brief)
+                        BuildConfig.FLAVOR == "production" -> PublicCabinet { tab = 1 }
                         !configured -> { BrandHero("МОЙ КАБИНЕТ"); InfoCard("Тестовый сервер не настроен", "Для этой сборки не задан тестовый API. Подключение не выполняется.", true) }
                         auth.profile == null -> {
                             BrandHero("МОЙ КАБИНЕТ")

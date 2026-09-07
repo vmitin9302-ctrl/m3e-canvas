@@ -21,8 +21,7 @@ import kotlinx.coroutines.*
 @Composable fun PortfolioScreen(vm: PortfolioViewModel, discuss: () -> Unit) {
     DisposableEffect(vm) { vm.enter(); onDispose { vm.leave() } }
     BackHandler(vm.selectedSlug != null) { vm.back() }
-    Heading("Готовые проекты")
-    Note("Реальные проекты MITIN DEV")
+    SectionIntro("Сделано в MITIN DEV", "Готовые проекты", "Реальные проекты MITIN DEV")
     if (vm.selectedSlug == null) {
         SecondaryAction("Обновить", "portfolio-refresh") { vm.refresh() }
         when (val state = vm.list) {
@@ -30,7 +29,7 @@ import kotlinx.coroutines.*
             PortfolioState.Empty -> InfoCard("Пока нет проектов", "Новые кейсы появятся здесь после публикации.", tag = "portfolio-empty")
             is PortfolioState.Error -> PortfolioError(state.message) { vm.refresh() }
             is PortfolioState.Success -> state.value.forEach { item ->
-                Card(Modifier.fillMaxWidth().testTag("portfolio-${item.slug}")) {
+                Card(Modifier.fillMaxWidth().testTag("portfolio-${item.slug}"), shape = androidx.compose.foundation.shape.RoundedCornerShape(28.dp), border = androidx.compose.foundation.BorderStroke(1.dp, NeonEdge), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)) {
                     Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                         PortfolioCover(item.coverImageUrl, item.title)
                         Text(item.title, style = MaterialTheme.typography.titleLarge)
