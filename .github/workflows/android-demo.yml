@@ -52,9 +52,11 @@ jobs:
           python3 scripts/check_design.py
       - name: Build APK, unit tests and Android lint
         run: |
-          ./gradlew --no-daemon --console=plain assembleDemoDebug testDemoDebugUnitTest lintDemoDebug assembleDemoDebugAndroidTest 2>&1 | tee evidence/gradle-build.txt
+          ./gradlew --no-daemon --console=plain assembleDemoDebug testDemoDebugUnitTest lintDemoDebug assembleDemoDebugAndroidTest assembleInternalDebug testInternalDebugUnitTest lintInternalDebug assembleInternalDebugAndroidTest 2>&1 | tee evidence/gradle-build.txt
           cp app/build/outputs/apk/demo/debug/app-demo-debug.apk evidence/MITIN-DEV-demoDebug.apk
+          cp app/build/outputs/apk/internal/debug/app-internal-debug.apk evidence/MITIN-DEV-internalDebug.apk
           sha256sum evidence/MITIN-DEV-demoDebug.apk | tee evidence/APK-SHA256.txt
+          sha256sum evidence/MITIN-DEV-internalDebug.apk >> evidence/APK-SHA256.txt
           "$ANDROID_HOME/cmdline-tools/latest/bin/apkanalyzer" manifest permissions evidence/MITIN-DEV-demoDebug.apk > evidence/apk-permissions.txt
           if grep -q 'android.permission.INTERNET' evidence/apk-permissions.txt; then exit 1; fi
           "$ANDROID_HOME/build-tools/36.0.0/apksigner" verify --verbose evidence/MITIN-DEV-demoDebug.apk > evidence/apk-signature.txt
@@ -114,6 +116,8 @@ jobs:
           cp -R app/build/outputs/androidTest-results evidence/android-tests-large-font
           adb pull /sdcard/Download/mitin-dev-demo evidence/screenshots-large-font
           adb shell settings put system font_scale 1.0
+      - name: Internal navigation at 320, 360 and 412 dp with normal and 160 percent fonts
+        run: python3 scripts/verify_navigation.py
       - name: Collect emulator diagnostics
         if: always()
         run: |

@@ -2,6 +2,9 @@ package dev.mitin.demo
 
 import android.os.Bundle
 import androidx.activity.SystemBarStyle
+import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
@@ -30,6 +33,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
+        installSplashScreen()
         super.onCreate(savedInstanceState)
         enableEdgeToEdge(
             statusBarStyle = SystemBarStyle.dark(android.graphics.Color.TRANSPARENT),
@@ -109,6 +113,8 @@ class MainActivity : ComponentActivity() {
                     if (stack.size > 1) IconButton(onClick = { back() }, modifier = Modifier.testTag("back")) {
                         Icon(Icons.AutoMirrored.Outlined.ArrowBack, "Назад")
                     } else Spacer(Modifier.width(12.dp))
+                    BrandEmblem(32.dp)
+                    Spacer(Modifier.width(10.dp))
                     Text(title, Modifier.weight(1f), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                     TextButton(onClick = { go("demo") }, modifier = Modifier.testTag("demo-menu")) { Text("ДЕМО") }
                 }
@@ -123,7 +129,7 @@ class MainActivity : ComponentActivity() {
                     Triple("Главная", "o-home", Icons.Outlined.Dashboard), Triple("Заявки", "o-leads", Icons.Outlined.Inbox),
                     Triple("Проекты", "o-projects", Icons.Outlined.WorkOutline), Triple("Ещё", "o-more", Icons.Outlined.MoreHoriz)
                 )
-                NavigationBar {
+                NavigationBar(modifier = Modifier.border(androidx.compose.foundation.BorderStroke(0.5.dp, NeonEdge))) {
                     entries.forEach { (label, route, icon) ->
                         NavigationBarItem(
                             selected = screen == route,
@@ -136,7 +142,7 @@ class MainActivity : ComponentActivity() {
             }
         }
     ) { padding ->
-        Box(Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.TopCenter) {
+        Box(Modifier.fillMaxSize().background(BrandBackground).padding(padding), contentAlignment = Alignment.TopCenter) {
             key(screen) {
                 Column(Modifier.widthIn(max = 600.dp).fillMaxWidth().fillMaxHeight()
                     .verticalScroll(rememberScrollState()).padding(20.dp).testTag("screen-$screen"),
@@ -151,9 +157,7 @@ class MainActivity : ComponentActivity() {
                             Note("Не вводите реальные персональные данные. Демо сохраняется между запусками; сброс доступен в профиле и разделе «Ещё».")
                         }
                         "c-welcome" -> {
-                            Spacer(Modifier.height(28.dp))
-                            Eyebrow("От идеи до работающего продукта")
-                            Heading("MITIN DEV")
+                            BrandHero("СОЗДАЁМ DIGITAL-ПРОДУКТЫ")
                             Text("Сайты, боты и digital-системы для бизнеса.", style = MaterialTheme.typography.headlineSmall)
                             Spacer(Modifier.height(12.dp))
                             InfoCard("Ваш проект — рядом", "Заявка, этапы и решения в одном месте. Здесь можно пройти весь путь на демоданных.", true)

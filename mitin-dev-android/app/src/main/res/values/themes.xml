@@ -4,6 +4,11 @@
         <item name="android:windowLightStatusBar">false</item>
         <item name="android:windowActionModeOverlay">true</item>
         <item name="android:colorAccent">#D2BCFC</item>
-        <item name="android:windowBackground">#141317</item>
+        <item name="android:windowBackground">#090C13</item>
+    </style>
+    <style name="Theme.Mitin.Starting" parent="Theme.SplashScreen">
+        <item name="windowSplashScreenBackground">#090C13</item>
+        <item name="windowSplashScreenAnimatedIcon">@drawable/ic_mitin_emblem</item>
+        <item name="postSplashScreenTheme">@style/Theme.Mitin</item>
     </style>
 </resources>
