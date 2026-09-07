@@ -1,6 +1,7 @@
 package dev.mitin.internal
 
 import androidx.compose.ui.test.*
+import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.lifecycle.ViewModelProvider
 import androidx.test.platform.app.InstrumentationRegistry
@@ -92,8 +93,11 @@ class ProductionValidationTest {
                 "Основные функции: главная, услуги, галерея и ссылка на запись. Тексты и фотографии подготовим сами. Срок пока не согласован. Учти выбранный мной бюджет как ориентир, выдели MVP и возможные сторонние расходы. ${if(slug!=null) "Кейс используем только как направление, не копируем его дизайн или материалы." else "Развитие можно вынести на следующий этап."}"
             )
             for (message in messages) {
-                ui.onNodeWithTag("brief-message").performScrollTo().performTextReplacement(message)
-                tap("brief-send")
+                val input = ui.onNodeWithTag("brief-message")
+                input.performScrollTo().performClick()
+                Thread.sleep(800); ui.waitForIdle()
+                input.performTextReplacement(message); ui.waitForIdle(); input.assertTextContains(message)
+                ui.onNodeWithTag("brief-send").assertIsEnabled().performSemanticsAction(SemanticsActions.OnClick) { it() }
                 if (budget == "under_10k" && message == messages.last()) {
                     device.executeShellCommand("cmd connectivity airplane-mode enable")
                     device.executeShellCommand("svc wifi disable"); device.executeShellCommand("svc data disable")
