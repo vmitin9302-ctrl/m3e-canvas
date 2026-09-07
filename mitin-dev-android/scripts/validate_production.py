@@ -33,6 +33,10 @@ def phase(label, selector, *extra):
 
 phase('presentation-errors','ProductionPresentationTest')
 adb('shell','am','force-stop','dev.mitin.app')
+adb('shell','pm','clear','dev.mitin.app')
+adb('shell','am','force-stop','com.google.android.apps.nexuslauncher')
+adb('shell','svc','wifi','disable'); adb('shell','svc','data','disable')
+adb('shell','cmd','connectivity','airplane-mode','enable')
 phase('offline-start','ProductionOfflineTest')
 phase('real-ai','ProductionValidationTest#realProductionThreeBriefsNoSubmission','-e','authorizedProductionAi','yes')
 for width in (320,360,412):
