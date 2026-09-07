@@ -27,7 +27,7 @@ class ProductionPresentationTest {
         var current by mutableStateOf<BriefViewModel?>(null)
         ui.setContent { MitinTheme {
             if(current == null) LaunchScreen()
-            else Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(androidx.compose.ui.unit.Dp(20f))) { BriefScreen(current!!) }
+            else BriefScreen(current!!)
         } }
         ui.onNodeWithTag("launch-screen").assertIsDisplayed(); ui.waitForIdle()
         val device = UiDevice.getInstance(inst)

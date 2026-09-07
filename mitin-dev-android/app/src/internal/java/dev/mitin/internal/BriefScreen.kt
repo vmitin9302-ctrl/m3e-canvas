@@ -1,6 +1,11 @@
 package dev.mitin.internal
 
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.outlined.Send
+import androidx.compose.ui.Alignment
 import androidx.compose.foundation.relocation.BringIntoViewRequester
 import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.ui.focus.onFocusChanged
@@ -22,6 +27,33 @@ val briefBudgets = linkedMapOf("under_10k" to "до 10 000 ₽", "10_20k" to "10
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable fun BriefScreen(vm: BriefViewModel) {
+    Column(Modifier.widthIn(max = 600.dp).fillMaxWidth().fillMaxHeight()) {
+        Column(Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()).padding(20.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp)) {
+            BriefContent(vm)
+        }
+        if (vm.capabilities?.ai == true && vm.state != null && vm.state?.submitted != true && !vm.contactStep) {
+            BriefComposer(vm)
+        }
+    }
+}
+
+@Composable private fun BriefComposer(vm: BriefViewModel) {
+    var message by rememberSaveable { mutableStateOf("") }
+    Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        OutlinedTextField(message, { if (it.length <= 4000) message = it },
+            maxLines = 3, label = { Text("Сообщение AI") },
+            modifier = Modifier.weight(1f).testTag("brief-message"))
+        FilledIconButton(onClick = { vm.message(message); message = "" },
+            enabled = !vm.busy && message.isNotBlank(), modifier = Modifier.size(56.dp).testTag("brief-send")) {
+            Icon(Icons.AutoMirrored.Outlined.Send, contentDescription = "Отправить сообщение")
+        }
+    }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable private fun BriefContent(vm: BriefViewModel) {
     val state=vm.state
     val uri=LocalUriHandler.current
     val focus=LocalFocusManager.current
@@ -88,16 +120,6 @@ val briefBudgets = linkedMapOf("under_10k" to "до 10 000 ₽", "10_20k" to "10
                     }
                     PrimaryAction("Перейти к отправке заявки", "brief-to-contact",!vm.busy) { dismissInput(); vm.showContact() }
                 }
-                var message by rememberSaveable { mutableStateOf("") }
-                val inputPosition = remember { BringIntoViewRequester() }
-                var inputFocused by remember { mutableStateOf(false) }
-                val keyboardHeight = WindowInsets.ime.getBottom(LocalDensity.current)
-                LaunchedEffect(inputFocused, keyboardHeight) {
-                    if (inputFocused && keyboardHeight > 0) { delay(150); inputPosition.bringIntoView() }
-                }
-                OutlinedTextField(message,{if(it.length<=4000) message=it},maxLines=3,label={Text("Сообщение AI")},modifier=Modifier.fillMaxWidth()
-                    .bringIntoViewRequester(inputPosition).onFocusChanged { inputFocused = it.isFocused }.testTag("brief-message"))
-                PrimaryAction("Отправить сообщение", "brief-send",!vm.busy && message.isNotBlank()) { dismissInput(); vm.message(message); message="" }
                 if(state.messages.isNotEmpty()) PrimaryAction("Сформировать итоговое ТЗ", "brief-finalize",!vm.busy) { dismissInput(); vm.finalBrief() }
             }
             SecondaryAction("Обновить сессию", "brief-refresh") { vm.retry() }

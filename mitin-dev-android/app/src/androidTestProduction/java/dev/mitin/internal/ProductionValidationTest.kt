@@ -94,7 +94,7 @@ class ProductionValidationTest {
             )
             for (message in messages) {
                 val input = ui.onNodeWithTag("brief-message")
-                input.performScrollTo().performClick()
+                input.performClick()
                 Thread.sleep(800); ui.waitForIdle()
                 input.performTextReplacement(message); ui.waitForIdle(); input.assertTextContains(message)
                 ui.onNodeWithTag("brief-send").assertIsEnabled().performSemanticsAction(SemanticsActions.OnClick) { it() }
@@ -149,9 +149,17 @@ class ProductionValidationTest {
         waitFor("internal-nav-1"); tap("internal-nav-1"); stable(); waitFor("brief-to-contact")
         assertTrue(vm().state!!.finalBrief!!.length > 100)
         val label = InstrumentationRegistry.getArguments().getString("matrix") ?: "matrix"
-        ui.onNodeWithTag("brief-message").performScrollTo().performClick().performTextReplacement("Черновик без отправки")
+        ui.onNodeWithTag("brief-message").performClick().performTextReplacement("Черновик без отправки")
         Thread.sleep(800); ui.waitForIdle(); ui.onNodeWithTag("brief-message").assertIsDisplayed()
+        ui.onNodeWithTag("brief-message").assertTextContains("Черновик без отправки").assertHeightIsAtLeast(androidx.compose.ui.unit.Dp(64f))
+        ui.onNodeWithTag("brief-send").assertIsDisplayed().assertIsEnabled().assertHeightIsAtLeast(androidx.compose.ui.unit.Dp(48f))
         shot("$label-keyboard"); device.pressBack(); ui.waitForIdle()
+        waitFor("internal-nav-1")
+        ui.onNodeWithTag("brief-message").assertTextContains("Черновик без отправки").performClick()
+        Thread.sleep(800); ui.onNodeWithTag("brief-send").assertIsDisplayed()
+        ui.activityRule.scenario.recreate(); ui.waitForIdle(); stable()
+        ui.onNodeWithTag("brief-message").assertTextContains("Черновик без отправки")
+        device.pressBack(); ui.waitForIdle()
         ui.onNodeWithTag("brief-final").performScrollTo(); shot("$label-final")
         tap("brief-to-contact"); waitFor("submission-disabled"); shot("$label-closed")
         ui.activityRule.scenario.recreate(); ui.waitForIdle(); stable()

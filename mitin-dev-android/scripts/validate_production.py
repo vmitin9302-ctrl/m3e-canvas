@@ -10,6 +10,7 @@ import xml.etree.ElementTree as ET
 
 out = Path('evidence/instrumentation'); out.mkdir(parents=True, exist_ok=True)
 runner = 'dev.mitin.app.test/androidx.test.runner.AndroidJUnitRunner'
+failures = []
 
 
 def adb(*args):
@@ -27,8 +28,8 @@ def phase(label, selector, *extra):
     case = ET.SubElement(suite,'testcase',name=selector)
     if not success: ET.SubElement(case,'failure').text='See redacted instrumentation output'
     ET.ElementTree(suite).write(out / (label+'.xml'),encoding='utf-8',xml_declaration=True)
-    if not success: raise RuntimeError('Production validation failed: '+label)
-    print(label+': PASS',flush=True)
+    if not success: failures.append(label)
+    print(label+(': PASS' if success else ': FAIL'),flush=True)
 
 
 phase('presentation-errors','ProductionPresentationTest')
@@ -49,3 +50,5 @@ for width in (320,360,412):
         phase(label,'ProductionValidationTest#retainedRealBriefMatrix','-e','matrix',label)
 adb('shell','wm','size','reset'); adb('shell','wm','density','reset')
 adb('shell','settings','put','system','font_scale','1.0')
+if failures:
+    raise RuntimeError('Production validation failed: ' + ', '.join(failures))

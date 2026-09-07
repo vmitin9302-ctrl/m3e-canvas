@@ -124,10 +124,11 @@ class InternalActivity : ComponentActivity() {
     var confirmAll by remember(auth.profile?.userId) { mutableStateOf(false) }
     var selected by remember(auth.profile?.userId) { mutableStateOf<RemoteSession?>(null) }
     val keyboard = LocalSoftwareKeyboardController.current
-    BackHandler(enabled = showSessions || tab != 2) { showSessions = false; tab = 2; keyboard?.hide() }
+    val imeVisible = WindowInsets.ime.getBottom(LocalDensity.current) > 0
+    BackHandler(enabled = !imeVisible && (showSessions || tab != 2)) { showSessions = false; tab = 2; keyboard?.hide() }
     if (auth.restoring) { LaunchScreen(); return }
     Scaffold(Modifier.fillMaxSize().imePadding(), topBar = {
-        Surface(color = MaterialTheme.colorScheme.surfaceContainer) {
+        if (!imeVisible) Surface(color = MaterialTheme.colorScheme.surfaceContainer) {
             Row(Modifier.fillMaxWidth().statusBarsPadding().padding(16.dp), verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 BrandEmblem(36.dp)
@@ -136,11 +137,12 @@ class InternalActivity : ComponentActivity() {
             }
         }
     }, bottomBar = {
-        InternalNavigationBar(tab) { tab = it; showSessions = false; keyboard?.hide() }
+        if (!imeVisible) InternalNavigationBar(tab) { tab = it; showSessions = false; keyboard?.hide() }
     }) { padding ->
         Box(Modifier.fillMaxSize().background(BrandBackground).padding(padding), contentAlignment = Alignment.TopCenter) {
             key(auth.profile?.userId, tab, showSessions) {
-                Column(Modifier.widthIn(max = 600.dp).fillMaxWidth().fillMaxHeight().verticalScroll(rememberScrollState()).padding(20.dp),
+                if (tab == 1) BriefScreen(brief)
+                else Column(Modifier.widthIn(max = 600.dp).fillMaxWidth().fillMaxHeight().verticalScroll(rememberScrollState()).padding(20.dp),
                     verticalArrangement = Arrangement.spacedBy(16.dp)) {
                     when {
                         tab == 0 -> PortfolioScreen(portfolio) { brief.fromPortfolio(portfolio.selectedSlug, (portfolio.detail as? PortfolioState.Success<PortfolioItem>)?.value?.title); tab = 1 }
