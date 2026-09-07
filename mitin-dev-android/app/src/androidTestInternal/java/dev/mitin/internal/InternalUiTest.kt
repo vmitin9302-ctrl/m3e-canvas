@@ -142,7 +142,7 @@ class InternalUiTest {
         tap("network-logout");waitFor("login-email");shot("07-local-data-cleared")
     }
     @Test fun keyboardBackPasswordNotSavedAndFutureSectionsHonest() {
-        tap("internal-nav-0");ui.onNodeWithText("Портфолио — следующий этап").assertExists();shot("08-portfolio-next-stage")
+        tap("internal-nav-0");waitFor("portfolio-ritmassage");ui.onNodeWithText("РиТМассаж").assertExists();shot("08-public-portfolio")
         tap("internal-nav-1");ui.onNodeWithText("AI-бриф — следующий этап").assertExists();shot("09-ai-next-stage")
         tap("internal-nav-2")
         ui.onNodeWithTag("login-email").performScrollTo().performTextReplacement(CLIENT_A)
