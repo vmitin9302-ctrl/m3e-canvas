@@ -24,9 +24,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.rememberTextMeasurer
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.Constraints
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
@@ -122,12 +126,7 @@ class InternalActivity : ComponentActivity() {
             }
         }
     }, bottomBar = {
-        NavigationBar(Modifier.border(androidx.compose.foundation.BorderStroke(0.5.dp, NeonEdge))) {
-            listOf("Готовые проекты" to Icons.Outlined.WorkOutline, "Обсудить с AI" to Icons.Outlined.AutoAwesome, "Мой кабинет" to Icons.Outlined.PersonOutline).forEachIndexed { index, (label, icon) ->
-                NavigationBarItem(selected = tab == index, onClick = { tab = index; showSessions = false; keyboard?.hide() },
-                    icon = { Icon(icon, null) }, label = { Text(label) }, modifier = Modifier.testTag("internal-nav-$index").heightIn(min = if (LocalDensity.current.fontScale > 1.3f) 130.dp else 90.dp))
-            }
-        }
+        InternalNavigationBar(tab) { tab = it; showSessions = false; keyboard?.hide() }
     }) { padding ->
         Box(Modifier.fillMaxSize().background(BrandBackground).padding(padding), contentAlignment = Alignment.TopCenter) {
             key(auth.profile?.userId, tab, showSessions) {
@@ -192,4 +191,37 @@ class InternalActivity : ComponentActivity() {
         confirmButton = { TextButton(onClick = { confirmAll = false; vm.logout(true) }, modifier = Modifier.testTag("confirm-logout-all")) { Text("Выйти везде") } }, dismissButton = { TextButton(onClick = { confirmAll = false }) { Text("Отмена") } })
     selected?.let { item -> AlertDialog(onDismissRequest = { selected = null }, title = { Text("Отозвать сессию?") }, text = { Text(if (item.current) "Это устройство потеряет доступ." else "Выбранное устройство потеряет доступ.") },
         confirmButton = { TextButton(onClick = { selected = null; vm.revoke(item) }, modifier = Modifier.testTag("confirm-revoke")) { Text("Отозвать") } }, dismissButton = { TextButton(onClick = { selected = null }) { Text("Отмена") } }) }
+}
+
+@Composable private fun InternalNavigationBar(selected: Int, onSelect: (Int) -> Unit) {
+    val destinations = listOf("Готовые проекты" to Icons.Outlined.WorkOutline,
+        "Обсудить с AI" to Icons.Outlined.AutoAwesome, "Мой кабинет" to Icons.Outlined.PersonOutline)
+    val density = LocalDensity.current
+    val measurer = rememberTextMeasurer()
+    val labelStyle = MaterialTheme.typography.labelLarge.copy(textAlign = TextAlign.Center)
+    // Consume horizontal safe insets before measuring; NavigationBar retains its
+    // bottom system inset, outside the items' full-size touch targets.
+    BoxWithConstraints(Modifier.fillMaxWidth().windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal))) {
+        // Material NavigationBar has horizontal content padding. Reserve that
+        // space plus breathing room inside each of the three equal-width items.
+        val labelWidth = (maxWidth / destinations.size - 24.dp).coerceAtLeast(1.dp)
+        val textHeight = with(density) {
+            destinations.maxOf { (label, _) ->
+                measurer.measure(AnnotatedString(label), style = labelStyle,
+                    constraints = Constraints(maxWidth = labelWidth.roundToPx())).size.height
+            }.toDp()
+        }
+        val itemHeight = maxOf(80.dp, textHeight + 56.dp)
+        NavigationBar(modifier = Modifier.testTag("internal-navigation-bar")
+            .border(androidx.compose.foundation.BorderStroke(0.5.dp, NeonEdge)),
+            windowInsets = NavigationBarDefaults.windowInsets.only(WindowInsetsSides.Bottom)) {
+            destinations.forEachIndexed { index, (label, icon) ->
+                NavigationBarItem(selected = selected == index, onClick = { onSelect(index) },
+                    icon = { Icon(icon, null) },
+                    label = { Text(label, style = labelStyle,
+                        modifier = Modifier.width(labelWidth).testTag("internal-nav-label-$index")) },
+                    modifier = Modifier.testTag("internal-nav-$index").heightIn(min = itemHeight))
+            }
+        }
+    }
 }
