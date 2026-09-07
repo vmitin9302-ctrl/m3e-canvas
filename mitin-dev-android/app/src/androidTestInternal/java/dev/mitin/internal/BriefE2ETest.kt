@@ -44,6 +44,24 @@ private fun confirm(record: BriefRecord,state: BriefState) = action(record,state
 })
 
 class BriefNetworkE2ETest {
+    @Test fun providerAndValidationFailuresNeverCreateLead() = runBlocking {
+        val api=HttpBriefRepository("https://localhost:8443/");val record=fresh("under_10k");val before=count()
+        var state=api.execute(record)
+        suspend fun rejected(request: BriefRecord,status:Int) {
+            val failure=runCatching {api.execute(request)}.exceptionOrNull()
+            assertTrue(failure is BriefFailure);assertEquals(status,(failure as BriefFailure).status);assertEquals(before,count())
+        }
+        for((message,status) in listOf("TEST_TIMEOUT" to 504,"TEST_PROVIDER_ERROR" to 503,"x".repeat(4001) to 422)) {
+            rejected(action(record,state,"messages",buildJsonObject {put("message",message)}),status)
+        }
+        state=api.execute(action(record,state,"messages",buildJsonObject {put("message","Синтетическая задача для MVP")}))
+        state=api.execute(action(record,state,"final"))
+        rejected(action(record,state,"prepare",buildJsonObject {put("name","Тест");put("contact_type","email");put("contact","invalid")}),422)
+        state=api.execute(action(record,state,"prepare",buildJsonObject {put("name","Тест");put("contact_type","email");put("contact","synthetic@example.com")}))
+        rejected(action(record,state,"confirm",buildJsonObject {put("proof",state.proof!!.dropLast(6)+"xxxxxx");put("consent",true);put("legal_digest",state.legalDigest)}),410)
+        rejected(action(record,state,"confirm",buildJsonObject {put("proof",state.proof);put("consent",false);put("legal_digest",state.legalDigest)}),422)
+        rejected(action(record,state,"confirm",buildJsonObject {put("proof",state.proof);put("consent",true);put("legal_digest",state.legalDigest);put("budget_range","70k_plus")}),422)
+    }
     @Test fun sixBudgetsRealPostgresAndDuplicateConfirmation() = runBlocking {
         val api=HttpBriefRepository("https://localhost:8443/")
         briefBudgets.keys.forEach { budget ->
@@ -76,6 +94,7 @@ class BriefUiE2ETest {
     private val instrumentation get()=InstrumentationRegistry.getInstrumentation()
     private fun waitFor(tag:String)=ui.waitUntil(60_000) {ui.onAllNodesWithTag(tag).fetchSemanticsNodes().isNotEmpty()}
     private fun tap(tag:String) {
+        waitFor(tag)
         val node=ui.onNodeWithTag(tag)
         if(ui.onAllNodes(hasTestTag(tag) and hasAnyAncestor(hasScrollAction())).fetchSemanticsNodes().isNotEmpty()) node.performScrollTo()
         node.performClick();ui.waitForIdle()
@@ -111,11 +130,13 @@ class BriefOfflineUiTest {
     @get:Rule val ui=createAndroidComposeRule<InternalActivity>()
     private fun waitFor(tag:String)=ui.waitUntil(60_000) {ui.onAllNodesWithTag(tag).fetchSemanticsNodes().isNotEmpty()}
     @Test fun persistStartWithoutNetwork() {
+        waitFor("internal-nav-1")
         ui.onNodeWithTag("internal-nav-1").performClick();waitFor("brief-start")
         ui.onNodeWithTag("brief-start").performScrollTo().performClick();waitFor("brief-error")
         ui.onNodeWithTag("brief-retry").assertExists()
     }
     @Test fun resumePersistedStart() {
+        waitFor("internal-nav-1")
         ui.onNodeWithTag("internal-nav-1").performClick();waitFor("brief-message")
         ui.onNodeWithTag("brief-reset").performScrollTo().performClick();waitFor("brief-start")
     }
