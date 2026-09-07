@@ -111,6 +111,7 @@ class InternalActivity : ComponentActivity() {
 }
 @Composable fun InternalApp(vm: InternalViewModel = viewModel()) {
     val portfolio: PortfolioViewModel = viewModel()
+    val brief: BriefViewModel = viewModel()
     val configured = vm.manager != null
     val auth = if (configured) vm.manager!!.state.collectAsStateWithLifecycle().value else AuthState(restoring = false)
     var tab by rememberSaveable { mutableIntStateOf(2) }
@@ -125,7 +126,7 @@ class InternalActivity : ComponentActivity() {
             Row(Modifier.fillMaxWidth().statusBarsPadding().padding(16.dp), verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 BrandEmblem(36.dp)
-                Column(Modifier.weight(1f)) { Text("MITIN DEV", style = MaterialTheme.typography.titleMedium); Text("ТЕСТОВОЕ ОКРУЖЕНИЕ", style = MaterialTheme.typography.labelSmall, color = NeonBlue) }
+                Column(Modifier.weight(1f)) { Text("MITIN DEV", style = MaterialTheme.typography.titleMedium); Text(if(BuildConfig.FLAVOR == "production") "ПРОЕКТЫ И РАЗРАБОТКА" else "ТЕСТОВОЕ ОКРУЖЕНИЕ", style = MaterialTheme.typography.labelSmall, color = NeonBlue) }
                 if (showSessions) IconButton(onClick = { showSessions = false }, modifier = Modifier.testTag("sessions-back")) { Icon(Icons.Outlined.Close, "Закрыть сессии") }
             }
         }
@@ -137,8 +138,8 @@ class InternalActivity : ComponentActivity() {
                 Column(Modifier.widthIn(max = 600.dp).fillMaxWidth().fillMaxHeight().verticalScroll(rememberScrollState()).padding(20.dp),
                     verticalArrangement = Arrangement.spacedBy(16.dp)) {
                     when {
-                        tab == 0 -> PortfolioScreen(portfolio) { tab = 1 }
-                        tab == 1 -> { BrandHero("ОБСУДИТЬ С AI"); InfoCard("AI-бриф — следующий этап", "Настоящий AI-бриф и отправка заявки в CRM будут подключены отдельно. Эта сборка проверяет вход и сессии.", true) }
+                        tab == 0 -> PortfolioScreen(portfolio) { brief.fromPortfolio(portfolio.selectedSlug, (portfolio.detail as? PortfolioState.Success<PortfolioItem>)?.value?.title); tab = 1 }
+                        tab == 1 -> BriefScreen(brief)
                         !configured -> { BrandHero("МОЙ КАБИНЕТ"); InfoCard("Тестовый сервер не настроен", "Для этой сборки не задан тестовый API. Подключение не выполняется.", true) }
                         auth.profile == null -> {
                             BrandHero("МОЙ КАБИНЕТ")
@@ -181,7 +182,7 @@ class InternalActivity : ComponentActivity() {
                             ActionRow("Мои сессии", "Устройства и управление доступом", Icons.Outlined.Devices, "open-sessions") { showSessions = true; vm.sessions() }
                             SecondaryAction("Обновить профиль", "profile-reload") { vm.profile() }
                             SecondaryAction("Выйти", "network-logout") { vm.logout() }
-                            InfoCard("Проектные разделы ещё не подключены", "Заявки, проекты, сообщения и файлы не загружаются. Демоданные не используются в сетевом кабинете.")
+                            InfoCard("Мои проекты", "Проекты появятся здесь после подключения кабинета")
                         }
                     }
                     if (vm.busy) LinearProgressIndicator(Modifier.fillMaxWidth())
@@ -215,7 +216,7 @@ class InternalActivity : ComponentActivity() {
                 measurer.measure(AnnotatedString(word), style = labelStyle, softWrap = false).size.width > availablePixels
             }
         }
-        val labels = if (useShortLabels) listOf("Кейсы", "AI-бриф", "Кабинет") else destinations.map { it.first }
+        val labels = listOf("Кейсы", "AI-бриф", "Кабинет")
         val textHeight = with(density) {
             labels.maxOf { label ->
                 measurer.measure(AnnotatedString(label), style = labelStyle,

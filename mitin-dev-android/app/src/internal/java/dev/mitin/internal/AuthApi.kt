@@ -8,6 +8,7 @@ import okhttp3.*
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.RequestBody.Companion.toRequestBody
+import dev.mitin.demo.BuildConfig
 import java.io.IOException
 import java.net.InetAddress
 import java.util.UUID
@@ -58,7 +59,7 @@ class HttpAuthApi(baseUrl: String, private val client: OkHttpClient = secureClie
     companion object {
         fun checkedOrigin(value: String): HttpUrl {
             val url = try { value.toHttpUrl() } catch (_: Exception) { throw AuthFailure() }
-            if (url.scheme != "https" || url.host !in setOf("localhost", "127.0.0.1") ||
+            if (url.scheme != "https" || url.host !in (if(BuildConfig.FLAVOR == "production") setOf("24promtbot.ru") else setOf("localhost", "127.0.0.1")) ||
                 url.encodedPath != "/" || url.query != null || url.fragment != null ||
                 url.username.isNotEmpty() || url.password.isNotEmpty()) throw AuthFailure()
             return url
@@ -72,8 +73,13 @@ class HttpAuthApi(baseUrl: String, private val client: OkHttpClient = secureClie
             .authenticator(Authenticator.NONE).proxyAuthenticator(Authenticator.NONE)
             .cookieJar(CookieJar.NO_COOKIES).cache(null)
             .dns { host ->
-                if (host !in setOf("localhost", "127.0.0.1")) throw java.net.UnknownHostException("Untrusted origin")
-                listOf(InetAddress.getByAddress(byteArrayOf(127, 0, 0, 1)))
+                if(BuildConfig.FLAVOR == "production") {
+                    if(host != "24promtbot.ru") throw java.net.UnknownHostException("Untrusted origin")
+                    Dns.SYSTEM.lookup(host)
+                } else {
+                    if (host !in setOf("localhost", "127.0.0.1")) throw java.net.UnknownHostException("Untrusted origin")
+                    listOf(InetAddress.getByAddress(byteArrayOf(127, 0, 0, 1)))
+                }
             }.build()
     }
     private class AccountCall(val epoch: Long)
