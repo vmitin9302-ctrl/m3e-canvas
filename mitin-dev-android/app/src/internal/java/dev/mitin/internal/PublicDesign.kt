@@ -39,13 +39,13 @@ import dev.mitin.demo.*
             verticalArrangement = Arrangement.Center) {
             BrandEmblem(100.dp)
             Spacer(Modifier.height(28.dp))
-            Text("MITIN DEV", style = MaterialTheme.typography.headlineLarge, fontWeight = FontWeight.Bold, letterSpacing = 3.sp)
+            Text("MITIN DEV", style = MaterialTheme.typography.headlineLarge, fontWeight = FontWeight.Bold, letterSpacing = 3.sp, color = MaterialTheme.colorScheme.onSurface)
             Spacer(Modifier.height(12.dp))
             Text("От идеи — к работающему продукту", style = MaterialTheme.typography.bodyLarge,
                 color = MaterialTheme.colorScheme.onSurfaceVariant, textAlign = TextAlign.Center)
             Spacer(Modifier.height(40.dp))
             if (failed) {
-                Text("Не удалось подключиться", style = MaterialTheme.typography.titleMedium)
+                Text("Не удалось подключиться", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurface)
                 Spacer(Modifier.height(8.dp))
                 Text("Проверьте интернет и попробуйте ещё раз.", textAlign = TextAlign.Center, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 Spacer(Modifier.height(20.dp))
