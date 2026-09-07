@@ -23,8 +23,9 @@ class PortfolioViewModel(
     private var detailJob: Job? = null
     private var loadedAt = 0L
     fun enter() {
-        if (list is PortfolioState.Loading || System.nanoTime() - loadedAt > 60_000_000_000L) refresh()
-        selectedSlug?.let { if (detail is PortfolioState.Loading) open(it) }
+        val stale = System.nanoTime() - loadedAt > 60_000_000_000L
+        if (list is PortfolioState.Loading || stale) refresh()
+        selectedSlug?.let { if (detail is PortfolioState.Loading || stale) open(it) }
     }
     fun refresh() {
         listJob?.cancel()

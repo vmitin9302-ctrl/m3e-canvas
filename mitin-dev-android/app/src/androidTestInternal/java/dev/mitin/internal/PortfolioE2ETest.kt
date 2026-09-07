@@ -45,8 +45,7 @@ class PortfolioE2ETest {
         ui.onNodeWithTag("portfolio-image").performScrollTo().assertIsDisplayed(); shot("cover")
         ui.onNodeWithTag("portfolio-site").performScrollTo().assertIsDisplayed(); shot("detail")
         ui.activityRule.scenario.recreate(); ui.waitForIdle()
-        // The existing tab defaults to Cabinet after recreation; re-enter the retained portfolio VM.
-        tap("internal-nav-0"); waitFor("portfolio-detail-title")
+        waitFor("portfolio-detail-title")
         device.pressBack(); ui.waitForIdle(); waitFor("portfolio-ritmassage")
         tap("portfolio-open-diveev-studio"); waitFor("portfolio-detail-title")
         ui.onNodeWithTag("portfolio-detail-title").assertTextEquals("DIVEEV STUDIO")

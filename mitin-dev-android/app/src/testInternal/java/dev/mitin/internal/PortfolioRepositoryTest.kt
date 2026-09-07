@@ -9,7 +9,7 @@ import java.util.concurrent.TimeUnit
 
 class PortfolioRepositoryTest {
     private val item = """{"slug":"server-case","title":"Server title","short_description":"Short","description":"Long","cover_image_url":null,"project_url":"https://example.com"}"""
-    private fun tls(block: suspend (MockWebServer, HttpPortfolioRepository) -> Unit) = runBlocking {
+    private fun tls(block: suspend CoroutineScope.(MockWebServer, HttpPortfolioRepository) -> Unit) = runBlocking {
         val cert = HeldCertificate.Builder().commonName("localhost").addSubjectAlternativeName("localhost").build()
         val serverTls = HandshakeCertificates.Builder().heldCertificate(cert).build()
         val trust = HandshakeCertificates.Builder().addTrustedCertificate(cert.certificate).build()

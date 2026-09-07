@@ -35,10 +35,11 @@ interface PortfolioRepository {
 
 /** Separate unauthenticated calls, reusing the existing verified TLS transport policy.
  * No token, cookie, auth retry, persistent cache or user-dependent state. */
-class HttpPortfolioRepository(baseUrl: String, private val client: OkHttpClient = HttpAuthApi.secureClient()) : PortfolioRepository {
+class HttpPortfolioRepository(baseUrl: String, private val client: OkHttpClient = publicClient) : PortfolioRepository {
     private val base = HttpAuthApi.checkedOrigin(baseUrl)
     private val json = Json { ignoreUnknownKeys = true }
     companion object {
+        private val publicClient by lazy { HttpAuthApi.secureClient() }
         val slugPattern = Regex("[a-z0-9]+(?:-[a-z0-9]+)*")
         fun validSlug(slug: String) = slug.length in 1..80 && slugPattern.matches(slug)
     }
@@ -67,10 +68,10 @@ class HttpPortfolioRepository(baseUrl: String, private val client: OkHttpClient 
         val parsed = safePortfolioUrl(url)?.toHttpUrlOrNull() ?: throw PortfolioFailure()
         // This stage's images are served by the isolated backend static route.
         if (parsed.host != base.host || parsed.port != base.port || !parsed.encodedPath.startsWith("/portfolio/")) throw PortfolioFailure()
-        return bytes(parsed, 4 * 1024 * 1024, "image/")
+        return bytes(parsed, 4L * 1024 * 1024, "image/")
     }
     private suspend fun bytes(url: HttpUrl, limit: Long, contentType: String): ByteArray {
-        val call = client.newCall(Request.Builder().url(url).header("Accept", contentType)
+        val call = client.newCall(Request.Builder().url(url).header("Accept", if (contentType.endsWith('/')) "${contentType}*" else contentType)
             .header("Cache-Control", "no-cache").build())
         return suspendCancellableCoroutine { continuation ->
             continuation.invokeOnCancellation { call.cancel() }

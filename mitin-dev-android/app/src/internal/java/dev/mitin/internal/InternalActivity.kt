@@ -19,6 +19,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalDensity
@@ -112,7 +113,7 @@ class InternalActivity : ComponentActivity() {
     val portfolio: PortfolioViewModel = viewModel()
     val configured = vm.manager != null
     val auth = if (configured) vm.manager!!.state.collectAsStateWithLifecycle().value else AuthState(restoring = false)
-    var tab by remember { mutableIntStateOf(2) }
+    var tab by rememberSaveable { mutableIntStateOf(2) }
     var showSessions by remember(auth.profile?.userId) { mutableStateOf(false) }
     var confirmAll by remember(auth.profile?.userId) { mutableStateOf(false) }
     var selected by remember(auth.profile?.userId) { mutableStateOf<RemoteSession?>(null) }
