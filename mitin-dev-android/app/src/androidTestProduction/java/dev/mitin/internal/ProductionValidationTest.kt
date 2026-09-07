@@ -5,6 +5,7 @@ import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.lifecycle.ViewModelProvider
 import androidx.test.platform.app.InstrumentationRegistry
 import androidx.test.uiautomator.UiDevice
+import androidx.test.uiautomator.By
 import kotlinx.coroutines.*
 import kotlinx.serialization.json.*
 import org.junit.Assert.*
@@ -19,7 +20,14 @@ class ProductionValidationTest {
     private val inst get() = InstrumentationRegistry.getInstrumentation()
     private val device get() = UiDevice.getInstance(inst)
     private val context get() = inst.targetContext
+    private fun dismissUnrelatedLauncherDialog() {
+        // API 35's bundled Pixel Launcher may ANR on a freshly booted headless emulator.
+        // Never dismiss an MITIN DEV failure or any other application dialog.
+        if (device.findObject(By.text("Pixel Launcher isn't responding")) != null)
+            device.findObject(By.text("Close app"))?.click()
+    }
     private fun waitFor(tag: String) = ui.waitUntil(75_000) {
+        dismissUnrelatedLauncherDialog()
         // Returning from Chrome temporarily leaves no resumed Compose root.
         runCatching { ui.onAllNodesWithTag(tag).fetchSemanticsNodes().isNotEmpty() }.getOrDefault(false)
     }
@@ -37,6 +45,7 @@ class ProductionValidationTest {
     }
     private fun stable() = ui.waitUntil(75_000) { !vm().busy }
     private fun shot(name: String) {
+        dismissUnrelatedLauncherDialog()
         ui.waitForIdle()
         val frame = CountDownLatch(1)
         inst.runOnMainSync {
