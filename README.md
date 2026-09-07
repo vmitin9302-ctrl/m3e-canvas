@@ -277,3 +277,7 @@ M3E Canvas는 무료이며 MIT 라이선스로 계속 유지됩니다. 시간을
 ### 라이선스
 
 MIT © lnkiai
+
+## MITIN DEV Public v1 candidate
+
+Native AI brief, durable recovery and unsigned productionRelease configuration: [PUBLIC_V1_AI_BRIEF.md](docs/PUBLIC_V1_AI_BRIEF.md). New backend functions remain disabled in production; this is a review candidate, not a published application.

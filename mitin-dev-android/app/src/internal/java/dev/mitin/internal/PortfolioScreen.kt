@@ -104,7 +104,9 @@ import kotlinx.coroutines.*
     }
     val loaded = bitmap
     if (loaded != null) Image(loaded, "Обложка: $title", Modifier.fillMaxWidth().height(200.dp).testTag("portfolio-image"), contentScale = ContentScale.Crop)
-    else Surface(Modifier.fillMaxWidth().heightIn(min = 100.dp).testTag("portfolio-image-placeholder")) {
+    // Reserve the loaded cover's size while the asynchronous image is loading
+    // or unavailable. Otherwise card actions move under a user's in-flight tap.
+    else Surface(Modifier.fillMaxWidth().height(200.dp).testTag("portfolio-image-placeholder")) {
         Text(if (loading) "Загружаем изображение…" else "Изображение недоступно", Modifier.padding(20.dp))
     }
 }

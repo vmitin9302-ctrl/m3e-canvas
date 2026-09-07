@@ -91,3 +91,7 @@ Auth-клиент не сохраняет простаивающие TLS-сое�
 ## Public portfolio (internalDebug)
 
 «Готовые проекты» now loads the real backend public catalog before login, with native detail and images. Retry/Refresh fetch server data; «Открыть сайт» opens HTTPS in the system browser. «Обсудить похожий проект» opens the AI-next-stage placeholder. No leads or AI calls. See [PUBLIC_PORTFOLIO_INTEGRATION.md](../docs/PUBLIC_PORTFOLIO_INTEGRATION.md) for contract, isolated configuration and release boundaries.
+
+## Public v1 candidate update
+
+The earlier AI-placeholder/auth-only sections above describe the baseline. This feature branch implements the native AI/confirm flow and unsigned productionRelease: see [current architecture](../docs/PUBLIC_V1_AI_BRIEF.md). No release signing, production enabling or deployment is performed.

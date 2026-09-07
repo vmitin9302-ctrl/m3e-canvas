@@ -49,7 +49,7 @@ class PortfolioE2ETest {
         device.pressBack(); ui.waitForIdle(); waitFor("portfolio-ritmassage")
         tap("portfolio-open-diveev-studio"); waitFor("portfolio-detail-title")
         ui.onNodeWithTag("portfolio-detail-title").assertTextEquals("DIVEEV STUDIO")
-        tap("portfolio-discuss"); ui.onNodeWithText("AI-бриф — следующий этап").assertExists()
+        tap("portfolio-discuss"); ui.onNodeWithText("Что хотите создать?").assertExists()
         runBlocking { manager.login(CLIENT_A, Secret(TEST_PASSWORD)) }
         assertNotNull(manager.state.value.profile)
         tap("internal-nav-0"); tap("portfolio-back"); tap("portfolio-refresh"); waitFor("portfolio-ritmassage")

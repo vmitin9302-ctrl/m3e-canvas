@@ -27,12 +27,18 @@ android {
             buildConfigField("String", "API_BASE_URL", "\"$endpoint\"")
             resValue("string", "app_name", "MITIN DEV · Тест")
         }
+        create("production") {
+            dimension = "environment"
+            buildConfigField("String", "API_BASE_URL", "\"https://24promtbot.ru/\"")
+            resValue("string", "app_name", "MITIN DEV")
+        }
         create("demo") {
             dimension = "environment"
             applicationIdSuffix = ".demo"
             versionNameSuffix = "-demo"
         }
     }
+    sourceSets.getByName("production").java.srcDir("src/internal/java")
     buildTypes { release { isMinifyEnabled = false } }
     buildFeatures { compose = true; buildConfig = true }
     compileOptions {
@@ -43,7 +49,7 @@ android {
     testOptions { animationsDisabled = true }
 }
 kotlin { compilerOptions { jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17) } }
-androidComponents { beforeVariants(selector().withBuildType("release")) { it.enable = false } }
+androidComponents { beforeVariants(selector().withBuildType("release")) { it.enable = it.productFlavors.any { pair -> pair.second == "production" } } }
 dependencies {
     implementation(platform("androidx.compose:compose-bom:2025.10.01"))
     implementation("androidx.compose.ui:ui")
@@ -57,6 +63,7 @@ dependencies {
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.9.0")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.10.2")
     "internalImplementation"("com.squareup.okhttp3:okhttp:5.3.2")
+    "productionImplementation"("com.squareup.okhttp3:okhttp:5.3.2")
     "testInternalImplementation"("com.squareup.okhttp3:mockwebserver:5.3.2")
     "testInternalImplementation"("com.squareup.okhttp3:okhttp-tls:5.3.2")
     implementation("androidx.core:core-splashscreen:1.0.1")
