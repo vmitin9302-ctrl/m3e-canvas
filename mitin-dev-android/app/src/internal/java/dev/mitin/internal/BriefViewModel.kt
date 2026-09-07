@@ -75,6 +75,10 @@ class BriefViewModel(app: Application) : AndroidViewModel(app) {
     private suspend fun recover(current: BriefRecord) {
         val api = repository ?: throw BriefFailure(404)
         val value = try { api.get(current) } catch(e: BriefFailure) {
+            if(e.status == 410) {
+                val expired = current.copy(pendingPath=null,pendingBody=null)
+                store.save(expired); record=expired
+            }
             if(e.status == 404 && current.pendingPath == "sessions") { accept(api.execute(current)); return } else throw e
         }
         state = value

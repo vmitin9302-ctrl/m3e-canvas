@@ -92,6 +92,15 @@ class BriefNetworkE2ETest {
 class BriefUiE2ETest {
     @get:Rule val ui=createAndroidComposeRule<InternalActivity>()
     private val instrumentation get()=InstrumentationRegistry.getInstrumentation()
+    private fun shot(stage:String) {
+        ui.waitForIdle()
+        val device=UiDevice.getInstance(instrumentation)
+        val label=InstrumentationRegistry.getArguments().getString("portfolioCase") ?: "brief"
+        val file=File(instrumentation.targetContext.getExternalFilesDir(null),"brief-$label-$stage.png")
+        assertTrue(device.takeScreenshot(file))
+        device.executeShellCommand("mkdir -p /sdcard/Download/mitin-network")
+        device.executeShellCommand("cp ${file.absolutePath} /sdcard/Download/mitin-network/${file.name}")
+    }
     private fun waitFor(tag:String)=ui.waitUntil(60_000) {ui.onAllNodesWithTag(tag).fetchSemanticsNodes().isNotEmpty()}
     private fun tap(tag:String) {
         waitFor(tag)
@@ -105,6 +114,7 @@ class BriefUiE2ETest {
         waitFor("brief-start");tap("brief-start");waitFor("brief-message")
         ui.onNodeWithTag("brief-message").performScrollTo().performTextInput("Нужен сайт для синтетических клиентов, MVP и запись на услуги")
         tap("brief-send");waitFor("brief-finalize");tap("brief-finalize");waitFor("brief-to-contact")
+        ui.onNodeWithTag("brief-final").performScrollTo();shot("final")
         val rotationDevice=UiDevice.getInstance(instrumentation)
         rotationDevice.setOrientationLeft();ui.waitForIdle()
         rotationDevice.setOrientationNatural();ui.waitForIdle()
