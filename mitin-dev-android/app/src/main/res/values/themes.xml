@@ -1,0 +1,9 @@
+<resources>
+    <style name="Theme.Mitin" parent="android:style/Theme.Material.NoActionBar">
+        <item name="android:fontFamily">sans</item>
+        <item name="android:windowLightStatusBar">false</item>
+        <item name="android:windowActionModeOverlay">true</item>
+        <item name="android:colorAccent">#D2BCFC</item>
+        <item name="android:windowBackground">#141317</item>
+    </style>
+</resources>
