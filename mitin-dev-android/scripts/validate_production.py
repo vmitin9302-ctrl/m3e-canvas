@@ -19,10 +19,15 @@ def adb(*args):
 
 def phase(label, selector, *extra):
     command = ['adb','shell','am','instrument','-w','-r','-e','class','dev.mitin.internal.'+selector,*extra,runner]
-    result = subprocess.run(command, capture_output=True, text=True, timeout=900)
-    text = result.stdout + result.stderr
+    try:
+        result = subprocess.run(command, capture_output=True, text=True, timeout=900)
+        text = result.stdout + result.stderr
+        exit_code = result.returncode
+    except subprocess.TimeoutExpired:
+        text = 'Instrumentation exceeded its bounded timeout.'
+        exit_code = 1
     text = re.sub(r'Bearer\s+[A-Za-z0-9._-]+', 'Bearer <redacted>', text)
-    success = result.returncode == 0 and 'OK (1 test)' in text and 'FAILURES!!!' not in text
+    success = exit_code == 0 and 'OK (1 test)' in text and 'FAILURES!!!' not in text
     (out / (label+'.txt')).write_text(text)
     suite = ET.Element('testsuite', name=label, tests='1', failures='0' if success else '1')
     case = ET.SubElement(suite,'testcase',name=selector)

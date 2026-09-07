@@ -167,7 +167,12 @@ class ProductionValidationTest {
         Thread.sleep(800); ui.onNodeWithTag("brief-send").assertIsDisplayed()
         ui.activityRule.scenario.recreate(); ui.waitForIdle(); stable()
         ui.onNodeWithTag("brief-message").assertTextContains("Черновик без отправки")
+        // Recreation may restore focus without reopening the IME. Explicitly
+        // open it before testing Back; otherwise Back correctly leaves the tab.
+        ui.onNodeWithTag("brief-message").performClick()
+        ui.waitUntil(10_000) { ui.activity.window.decorView.rootWindowInsets?.isVisible(android.view.WindowInsets.Type.ime()) == true }
         device.pressBack(); ui.waitForIdle()
+        waitFor("brief-final")
         ui.onNodeWithTag("brief-final").performScrollTo(); shot("$label-final")
         tap("brief-to-contact"); waitFor("submission-disabled"); shot("$label-closed")
         ui.activityRule.scenario.recreate(); ui.waitForIdle(); stable()
