@@ -76,6 +76,7 @@ class BriefViewModel @JvmOverloads constructor(app: Application, private val rep
         contactStep = value.prepared != null && !value.submitted
     }
     private suspend fun recover(current: BriefRecord) {
+        if (capabilities?.ai != true) throw BriefFailure(404)
         val api = repository ?: throw BriefFailure(404)
         val value = try { api.get(current) } catch(e: BriefFailure) {
             if(e.status == 410) {
@@ -93,6 +94,7 @@ class BriefViewModel @JvmOverloads constructor(app: Application, private val rep
         }
     }
     private fun command(path: String, extra: JsonObject = JsonObject(emptyMap())) = run {
+        if (capabilities?.ai != true) throw BriefFailure(404)
         if (path in setOf("prepare", "confirm") && !submissionAvailable) throw BriefFailure(403, "submission_disabled")
         val existing = record ?: return@run
         if(existing.pendingPath != null) { recover(existing); return@run }

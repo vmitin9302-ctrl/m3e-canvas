@@ -63,6 +63,12 @@ class ProductionValidationTest {
                 if (ui.onAllNodesWithTag("portfolio-back").fetchSemanticsNodes().isNotEmpty()) tap("portfolio-back")
                 tap("portfolio-open-$slug"); waitFor("portfolio-detail-title"); waitFor("portfolio-image")
                 ui.onNodeWithTag("portfolio-site").performScrollTo().assertIsDisplayed(); shot("case-$slug")
+                tap("portfolio-site")
+                ui.waitUntil(10_000) { device.currentPackageName != context.packageName && device.currentPackageName != null }
+                assertNotEquals("External browser did not open", context.packageName, device.currentPackageName)
+                // Bring the existing activity back even if Chrome is showing its first-run screen.
+                context.startActivity(android.content.Intent(context, InternalActivity::class.java).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK or android.content.Intent.FLAG_ACTIVITY_REORDER_TO_FRONT))
+                waitFor("portfolio-discuss")
                 tap("portfolio-discuss")
             } else tap("internal-nav-1")
             tap("brief-service-site"); tap("brief-budget-$budget"); shot("selection-$budget"); tap("brief-start"); stable()
