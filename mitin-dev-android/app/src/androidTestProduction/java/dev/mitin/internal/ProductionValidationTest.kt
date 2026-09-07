@@ -92,7 +92,14 @@ class ProductionValidationTest {
                 "Это проверка приложения на вымышленном проекте. Нужен сайт небольшой студии керамики: показать услуги и работы, объяснить цены и дать ссылку на запись. Аудитория — жители города. На первом этапе достаточно простого MVP без оплаты и личного кабинета.",
                 "Основные функции: главная, услуги, галерея и ссылка на запись. Тексты и фотографии подготовим сами. Срок пока не согласован. Учти выбранный мной бюджет как ориентир, выдели MVP и возможные сторонние расходы. ${if(slug!=null) "Кейс используем только как направление, не копируем его дизайн или материалы." else "Развитие можно вынести на следующий этап."}"
             )
-            for (message in messages) {
+            val scenarioMessages = messages.mapIndexed { index, text ->
+                if (index != 0) text else text + when (slug) {
+                    "diveev-studio" -> " Я самозанятый."
+                    "ritmassage" -> " Возможно, позже добавим форму с именем и телефоном; состав данных и инфраструктура пока не определены."
+                    else -> ""
+                }
+            }
+            for (message in scenarioMessages) {
                 val input = ui.onNodeWithTag("brief-message")
                 input.performClick()
                 Thread.sleep(800); ui.waitForIdle()
@@ -120,7 +127,8 @@ class ProductionValidationTest {
             reports += buildJsonObject {
                 put("budget", budget); put("source_portfolio_slug", slug); put("submitted", state.submitted)
                 put("assistant_turns", state.messages.count { it.role != "user" }); put("final_characters", final.length)
-                put("user_messages_acknowledged", messages.all { sent -> state.messages.any { it.role == "user" && it.text == sent } })
+                put("user_messages_acknowledged", scenarioMessages.all { sent -> state.messages.any { it.role == "user" && it.text == sent } })
+                put("synthetic_final_brief", final)
                 put("final_sections", JsonArray(state.sections.map { JsonPrimitive(it.title) }))
                 put("assistant_excerpt", state.messages.filter { it.role != "user" }.joinToString("\n---\n") { it.text.take(1500) })
                 val lines = final.lines()

@@ -127,7 +127,7 @@ class BriefUiE2ETest {
         val before=runBlocking(Dispatchers.IO) {count()}
         tap("internal-nav-0");waitFor("portfolio-ritmassage");tap("portfolio-open-ritmassage");waitFor("portfolio-detail-title");tap("portfolio-discuss")
         waitFor("brief-start");tap("brief-start");waitFor("brief-message")
-        ui.onNodeWithTag("brief-message").performScrollTo().performTextInput("Нужен сайт для синтетических клиентов, MVP и запись на услуги")
+        ui.onNodeWithTag("brief-message").performTextInput("Нужен сайт для синтетических клиентов, MVP и запись на услуги")
         tap("brief-send");waitFor("brief-finalize");tap("brief-finalize");waitFor("brief-to-contact")
         ui.waitUntil(10_000) { !imeVisible() }
         ui.onNodeWithTag("brief-final").performScrollTo();shot("final")

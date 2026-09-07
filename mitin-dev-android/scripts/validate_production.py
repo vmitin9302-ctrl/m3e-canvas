@@ -32,6 +32,14 @@ def phase(label, selector, *extra):
     print(label+(': PASS' if success else ': FAIL'),flush=True)
 
 
+for width in (320, 360, 412):
+    for font in (1.0, 1.6):
+        adb('shell','wm','size',f'{width*3}x{round(width*3*20/9)}')
+        adb('shell','wm','density','480')
+        adb('shell','settings','put','system','font_scale',str(font))
+        phase(f'composer-{width}-{font}', 'ProductionComposerTest')
+adb('shell','wm','size','reset'); adb('shell','wm','density','reset')
+adb('shell','settings','put','system','font_scale','1.0')
 phase('presentation-errors','ProductionPresentationTest')
 adb('shell','am','force-stop','dev.mitin.app')
 adb('shell','pm','clear','dev.mitin.app')
