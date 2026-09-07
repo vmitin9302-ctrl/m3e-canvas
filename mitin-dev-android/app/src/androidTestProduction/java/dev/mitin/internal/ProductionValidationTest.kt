@@ -157,7 +157,10 @@ class ProductionValidationTest {
         waitFor("internal-nav-1"); tap("internal-nav-1"); stable(); waitFor("brief-to-contact")
         assertTrue(vm().state!!.finalBrief!!.length > 100)
         val label = InstrumentationRegistry.getArguments().getString("matrix") ?: "matrix"
-        ui.onNodeWithTag("brief-message").performClick().performTextReplacement("Черновик без отправки")
+        ui.onNodeWithTag("brief-message").performClick()
+        ui.waitUntil(10_000) { ui.activity.window.decorView.rootWindowInsets?.isVisible(android.view.WindowInsets.Type.ime()) == true }
+        ui.waitForIdle()
+        ui.onNodeWithTag("brief-message").performTextReplacement("Черновик без отправки")
         Thread.sleep(800); ui.waitForIdle(); ui.onNodeWithTag("brief-message").assertIsDisplayed()
         ui.onNodeWithTag("brief-message").assertTextContains("Черновик без отправки").assertHeightIsAtLeast(androidx.compose.ui.unit.Dp(64f))
         ui.onNodeWithTag("brief-send").assertIsDisplayed().assertIsEnabled().assertHeightIsAtLeast(androidx.compose.ui.unit.Dp(48f))
