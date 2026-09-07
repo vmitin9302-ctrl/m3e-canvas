@@ -45,13 +45,25 @@ class InternalNavigationTest {
             assertTrue("System navigation inset must be present", insets.bottom > 0)
         }
         val labels = listOf("Готовые проекты", "Обсудить с AI", "Мой кабинет")
+        val shortLabels = listOf("Кейсы", "AI-бриф", "Кабинет")
         val itemBounds = labels.indices.map { index ->
             val item = ui.onNodeWithTag("internal-nav-$index").assertIsDisplayed().assertHasClickAction()
+                .assertContentDescriptionEquals(labels[index])
             val label = ui.onNodeWithTag("internal-nav-label-$index", useUnmergedTree = true)
-                .assertIsDisplayed().assertTextEquals(labels[index])
+                .assertIsDisplayed()
             val layouts = mutableListOf<TextLayoutResult>()
             label.performSemanticsAction(SemanticsActions.GetTextLayoutResult) { it(layouts) }
             val layout = layouts.single()
+            val displayed = layout.layoutInput.text.text
+            assertTrue("Unexpected section label", displayed == labels[index] || displayed == shortLabels[index])
+            assertTrue("Navigation label requires more than two lines", layout.lineCount <= 2)
+            for (line in 0 until layout.lineCount - 1) {
+                val end = layout.getLineEnd(line, visibleEnd = true)
+                val next = layout.getLineStart(line + 1)
+                assertTrue("Word split across navigation lines: $displayed",
+                    displayed.substring(end, next).any { it.isWhitespace() } ||
+                        (end > 0 && displayed[end - 1] == '-'))
+            }
             assertFalse("${labels[index]} overflows its text layout", layout.hasVisualOverflow)
             for (line in 0 until layout.lineCount) assertFalse(layout.isLineEllipsized(line))
             val textBounds = label.fetchSemanticsNode().boundsInWindow
@@ -109,8 +121,8 @@ class InternalNavigationTest {
                 1 -> ui.onNodeWithText("AI-бриф — следующий этап").assertExists()
                 2 -> ui.onNodeWithText("МОЙ КАБИНЕТ").assertExists()
             }
-            assertNavigationFits()
             shot(index)
+            assertNavigationFits()
             if (index != 2) {
                 device.pressBack(); ui.waitForIdle()
                 ui.onNodeWithTag("internal-nav-2").assertIsSelected()

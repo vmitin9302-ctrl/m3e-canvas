@@ -24,6 +24,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextAlign
@@ -204,9 +206,16 @@ class InternalActivity : ComponentActivity() {
     BoxWithConstraints(Modifier.fillMaxWidth().windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal))) {
         // Material NavigationBar has horizontal content padding. Reserve that
         // space plus breathing room inside each of the three equal-width items.
-        val labelWidth = (maxWidth / destinations.size - 24.dp).coerceAtLeast(1.dp)
+        val labelWidth = (maxWidth / destinations.size - 12.dp).coerceAtLeast(1.dp)
+        val availablePixels = with(density) { labelWidth.roundToPx() }
+        val useShortLabels = destinations.any { (label, _) ->
+            label.split(' ').any { word ->
+                measurer.measure(AnnotatedString(word), style = labelStyle, softWrap = false).size.width > availablePixels
+            }
+        }
+        val labels = if (useShortLabels) listOf("Кейсы", "AI-бриф", "Кабинет") else destinations.map { it.first }
         val textHeight = with(density) {
-            destinations.maxOf { (label, _) ->
+            labels.maxOf { label ->
                 measurer.measure(AnnotatedString(label), style = labelStyle,
                     constraints = Constraints(maxWidth = labelWidth.roundToPx())).size.height
             }.toDp()
@@ -218,9 +227,10 @@ class InternalActivity : ComponentActivity() {
             destinations.forEachIndexed { index, (label, icon) ->
                 NavigationBarItem(selected = selected == index, onClick = { onSelect(index) },
                     icon = { Icon(icon, null) },
-                    label = { Text(label, style = labelStyle,
-                        modifier = Modifier.width(labelWidth).testTag("internal-nav-label-$index")) },
-                    modifier = Modifier.testTag("internal-nav-$index").heightIn(min = itemHeight))
+                    label = { Text(labels[index], style = labelStyle,
+                        modifier = Modifier.width(labelWidth).height(textHeight).testTag("internal-nav-label-$index")) },
+                    modifier = Modifier.testTag("internal-nav-$index").heightIn(min = itemHeight)
+                        .semantics { contentDescription = label })
             }
         }
     }
