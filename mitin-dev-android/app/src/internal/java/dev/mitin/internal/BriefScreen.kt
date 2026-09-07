@@ -81,17 +81,6 @@ val briefBudgets = linkedMapOf("under_10k" to "до 10 000 ₽", "10_20k" to "10
             } else {
                 state.messages.forEach { message -> ChatBubble(message) }
                 if(state.messages.isEmpty()) Note("Расскажите о задаче: для кого проект и какой результат нужен?")
-                var message by rememberSaveable { mutableStateOf("") }
-                val inputPosition = remember { BringIntoViewRequester() }
-                var inputFocused by remember { mutableStateOf(false) }
-                val keyboardHeight = WindowInsets.ime.getBottom(LocalDensity.current)
-                LaunchedEffect(inputFocused, keyboardHeight) {
-                    if (inputFocused && keyboardHeight > 0) { delay(150); inputPosition.bringIntoView() }
-                }
-                OutlinedTextField(message,{if(it.length<=4000) message=it},label={Text("Сообщение AI")},modifier=Modifier.fillMaxWidth()
-                    .bringIntoViewRequester(inputPosition).onFocusChanged { inputFocused = it.isFocused }.testTag("brief-message"))
-                PrimaryAction("Отправить сообщение", "brief-send",!vm.busy && message.isNotBlank()) { dismissInput(); vm.message(message); message="" }
-                if(state.messages.isNotEmpty()) PrimaryAction("Сформировать итоговое ТЗ", "brief-finalize",!vm.busy) { dismissInput(); vm.finalBrief() }
                 if(state.finalBrief != null) {
                     Heading("Итоговое ТЗ")
                     Surface(shape=androidx.compose.foundation.shape.RoundedCornerShape(24.dp), color=MaterialTheme.colorScheme.surfaceContainerLow) {
@@ -99,6 +88,17 @@ val briefBudgets = linkedMapOf("under_10k" to "до 10 000 ₽", "10_20k" to "10
                     }
                     PrimaryAction("Перейти к отправке заявки", "brief-to-contact",!vm.busy) { dismissInput(); vm.showContact() }
                 }
+                var message by rememberSaveable { mutableStateOf("") }
+                val inputPosition = remember { BringIntoViewRequester() }
+                var inputFocused by remember { mutableStateOf(false) }
+                val keyboardHeight = WindowInsets.ime.getBottom(LocalDensity.current)
+                LaunchedEffect(inputFocused, keyboardHeight) {
+                    if (inputFocused && keyboardHeight > 0) { delay(150); inputPosition.bringIntoView() }
+                }
+                OutlinedTextField(message,{if(it.length<=4000) message=it},maxLines=3,label={Text("Сообщение AI")},modifier=Modifier.fillMaxWidth()
+                    .bringIntoViewRequester(inputPosition).onFocusChanged { inputFocused = it.isFocused }.testTag("brief-message"))
+                PrimaryAction("Отправить сообщение", "brief-send",!vm.busy && message.isNotBlank()) { dismissInput(); vm.message(message); message="" }
+                if(state.messages.isNotEmpty()) PrimaryAction("Сформировать итоговое ТЗ", "brief-finalize",!vm.busy) { dismissInput(); vm.finalBrief() }
             }
             SecondaryAction("Обновить сессию", "brief-refresh") { vm.retry() }
             SecondaryAction("Начать новый бриф", "brief-reset") { vm.reset() }
