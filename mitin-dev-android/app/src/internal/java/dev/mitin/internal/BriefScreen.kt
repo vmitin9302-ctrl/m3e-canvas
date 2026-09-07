@@ -6,6 +6,8 @@ import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalUriHandler
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.testTag
 import dev.mitin.demo.*
 
@@ -15,6 +17,9 @@ val briefBudgets = linkedMapOf("under_10k" to "до 10 000 ₽", "10_20k" to "10
 @Composable fun BriefScreen(vm: BriefViewModel) {
     val state=vm.state
     val uri=LocalUriHandler.current
+    val focus=LocalFocusManager.current
+    val keyboard=LocalSoftwareKeyboardController.current
+    val dismissInput = { focus.clearFocus(); keyboard?.hide(); Unit }
     Heading("AI-бриф")
     if(vm.busy) { LinearProgressIndicator(Modifier.fillMaxWidth()); Note("AI отвечает или сервер проверяет состояние…") }
     vm.error?.let { InfoCard("Не удалось завершить действие",it,tag="brief-error") }
@@ -52,7 +57,7 @@ val briefBudgets = linkedMapOf("under_10k" to "до 10 000 ₽", "10_20k" to "10
                         FilterChip(type==key,{type=key},label={Text(label)},enabled=!vm.busy)
                     }
                     OutlinedTextField(contact,{if(it.length<=180) contact=it},label={Text("Контакт")},modifier=Modifier.fillMaxWidth().testTag("brief-contact"))
-                    PrimaryAction("Проверить контакт", "brief-prepare", !vm.busy && name.isNotBlank() && contact.isNotBlank()) { vm.prepare(name,type,contact) }
+                    PrimaryAction("Проверить контакт", "brief-prepare", !vm.busy && name.isNotBlank() && contact.isNotBlank()) { dismissInput(); vm.prepare(name,type,contact) }
                 } else {
                     Text("${state.prepared.name}\n${state.prepared.contact}")
                     SecondaryAction("Изменить контакт", "brief-edit-contact") { vm.editContact() }
@@ -68,11 +73,11 @@ val briefBudgets = linkedMapOf("under_10k" to "до 10 000 ₽", "10_20k" to "10
                 var message by rememberSaveable { mutableStateOf("") }
                 OutlinedTextField(message,{if(it.length<=4000) message=it},label={Text("Сообщение AI")},modifier=Modifier.fillMaxWidth().testTag("brief-message"))
                 PrimaryAction("Отправить сообщение", "brief-send",!vm.busy && message.isNotBlank()) { vm.message(message); message="" }
-                if(state.messages.isNotEmpty()) PrimaryAction("Сформировать итоговое ТЗ", "brief-finalize",!vm.busy) { vm.finalBrief() }
+                if(state.messages.isNotEmpty()) PrimaryAction("Сформировать итоговое ТЗ", "brief-finalize",!vm.busy) { dismissInput(); vm.finalBrief() }
                 if(state.finalBrief != null) {
                     Heading("Итоговое ТЗ")
                     Text(state.finalBrief,modifier=Modifier.testTag("brief-final"))
-                    PrimaryAction("Перейти к отправке заявки", "brief-to-contact",!vm.busy) { vm.showContact() }
+                    PrimaryAction("Перейти к отправке заявки", "brief-to-contact",!vm.busy) { dismissInput(); vm.showContact() }
                 }
             }
             SecondaryAction("Обновить сессию", "brief-refresh") { vm.retry() }

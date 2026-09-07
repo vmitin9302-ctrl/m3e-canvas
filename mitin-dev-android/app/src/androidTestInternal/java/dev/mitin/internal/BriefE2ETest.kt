@@ -92,6 +92,14 @@ class BriefNetworkE2ETest {
 class BriefUiE2ETest {
     @get:Rule val ui=createAndroidComposeRule<InternalActivity>()
     private val instrumentation get()=InstrumentationRegistry.getInstrumentation()
+    private fun imeVisible():Boolean {
+        var visible=false
+        instrumentation.runOnMainSync {
+            visible=androidx.core.view.ViewCompat.getRootWindowInsets(ui.activity.window.decorView)
+                ?.isVisible(androidx.core.view.WindowInsetsCompat.Type.ime()) == true
+        }
+        return visible
+    }
     private fun shot(stage:String) {
         ui.waitForIdle()
         val device=UiDevice.getInstance(instrumentation)
@@ -112,7 +120,8 @@ class BriefUiE2ETest {
         ui.waitUntil(60_000) { ui.onAllNodes(hasTestTag(tag) and isEnabled()).fetchSemanticsNodes().isNotEmpty() }
         val node=ui.onNodeWithTag(tag)
         if(ui.onAllNodes(hasTestTag(tag) and hasAnyAncestor(hasScrollAction())).fetchSemanticsNodes().isNotEmpty()) node.performScrollTo()
-        node.assertIsEnabled().performClick();ui.waitForIdle()
+        ui.waitForIdle()
+        node.assertIsDisplayed().assertIsEnabled().performClick();ui.waitForIdle()
     }
     @Test fun portfolioBriefReviewContactConfirmAndRecreation() {
         val before=runBlocking(Dispatchers.IO) {count()}
@@ -120,6 +129,7 @@ class BriefUiE2ETest {
         waitFor("brief-start");tap("brief-start");waitFor("brief-message")
         ui.onNodeWithTag("brief-message").performScrollTo().performTextInput("Нужен сайт для синтетических клиентов, MVP и запись на услуги")
         tap("brief-send");waitFor("brief-finalize");tap("brief-finalize");waitFor("brief-to-contact")
+        ui.waitUntil(10_000) { !imeVisible() }
         ui.onNodeWithTag("brief-final").performScrollTo();shot("final")
         val rotationDevice=UiDevice.getInstance(instrumentation)
         rotationDevice.setOrientationLeft()
@@ -131,8 +141,10 @@ class BriefUiE2ETest {
         ui.activityRule.scenario.recreate();ui.waitForIdle();waitFor("brief-to-contact")
         tap("brief-to-contact");waitFor("brief-name")
         ui.onNodeWithTag("brief-name").performScrollTo().performTextInput("Синтетический клиент")
-        ui.onNodeWithTag("brief-contact").performScrollTo().performTextInput("synthetic@example.com")
-        UiDevice.getInstance(instrumentation).pressBack();ui.waitForIdle()
+        ui.onNodeWithTag("brief-contact").performScrollTo().performClick().performTextInput("synthetic@example.com")
+        ui.waitUntil(10_000) { imeVisible() }
+        UiDevice.getInstance(instrumentation).pressBack()
+        ui.waitUntil(10_000) { !imeVisible() };ui.waitForIdle()
         tap("brief-prepare");waitFor("brief-consent")
         assertEquals(before,runBlocking(Dispatchers.IO) {count()})
         tap("brief-consent");tap("brief-confirm");waitFor("brief-new")
