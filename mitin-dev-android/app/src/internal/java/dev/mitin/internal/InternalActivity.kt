@@ -109,6 +109,7 @@ class InternalActivity : ComponentActivity() {
     }
 }
 @Composable fun InternalApp(vm: InternalViewModel = viewModel()) {
+    val portfolio: PortfolioViewModel = viewModel()
     val configured = vm.manager != null
     val auth = if (configured) vm.manager!!.state.collectAsStateWithLifecycle().value else AuthState(restoring = false)
     var tab by remember { mutableIntStateOf(2) }
@@ -135,7 +136,7 @@ class InternalActivity : ComponentActivity() {
                 Column(Modifier.widthIn(max = 600.dp).fillMaxWidth().fillMaxHeight().verticalScroll(rememberScrollState()).padding(20.dp),
                     verticalArrangement = Arrangement.spacedBy(16.dp)) {
                     when {
-                        tab == 0 -> { BrandHero("ГОТОВЫЕ ПРОЕКТЫ"); InfoCard("Портфолио — следующий этап", "Здесь появится публичный каталог с сайта MITIN DEV. В этой сборке каталог ещё не подключён.", true) }
+                        tab == 0 -> PortfolioScreen(portfolio) { tab = 1 }
                         tab == 1 -> { BrandHero("ОБСУДИТЬ С AI"); InfoCard("AI-бриф — следующий этап", "Настоящий AI-бриф и отправка заявки в CRM будут подключены отдельно. Эта сборка проверяет вход и сессии.", true) }
                         !configured -> { BrandHero("МОЙ КАБИНЕТ"); InfoCard("Тестовый сервер не настроен", "Для этой сборки не задан тестовый API. Подключение не выполняется.", true) }
                         auth.profile == null -> {

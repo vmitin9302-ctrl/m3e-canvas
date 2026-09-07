@@ -117,7 +117,7 @@ class InternalNavigationTest {
             ui.waitForIdle()
             ui.onNodeWithTag("internal-nav-$index").assertIsSelected()
             when (index) {
-                0 -> ui.onNodeWithText("Портфолио — следующий этап").assertExists()
+                0 -> ui.onNodeWithTag("portfolio-error").assertExists()
                 1 -> ui.onNodeWithText("AI-бриф — следующий этап").assertExists()
                 2 -> ui.onNodeWithText("МОЙ КАБИНЕТ").assertExists()
             }

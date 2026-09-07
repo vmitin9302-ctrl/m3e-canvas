@@ -87,3 +87,7 @@ Auth-клиент не сохраняет простаивающие TLS-сое�
 В Android CI отдельный `InternalNavigationTest` проверяет настоящий экран internal без настроенного API: ширину 320/360/412 dp, шрифт 100%/160%, все три выбранных пункта, отсутствие overflow/ellipsis/обрезания, области нажатия не меньше 48 dp, системные отступы, физические нажатия и Back. Узкий 320 dp / 160% сценарий повторяется с трёхкнопочной системной навигацией. `scripts/verify_navigation.py` запускается только на одноразовом эмуляторе и сохраняет JUnit, instrumentation-отчёты и по три скриншота для каждой конфигурации. Эта проверка не заменяет существующий HTTPS/FastAPI/PostgreSQL regression; результаты относятся только к завершённым CI на указанном в PR SHA.
 
 Новые зависимости: OkHttp 5.3.2 (только internal), MockWebServer/okhttp-tls 5.3.2 (только testInternal), core-splashscreen 1.0.1. Остальной стек не обновлялся. Runtime/test transitives перечисляет `writeDependencyInventory`; полный OSV audit выполняется в приватном CI, без ignores. Debug signing key временный; выпускной ключ не создаётся.
+
+## Public portfolio (internalDebug)
+
+«Готовые проекты» now loads the real backend public catalog before login, with native detail and images. Retry/Refresh fetch server data; «Открыть сайт» opens HTTPS in the system browser. «Обсудить похожий проект» opens the AI-next-stage placeholder. No leads or AI calls. See [PUBLIC_PORTFOLIO_INTEGRATION.md](../docs/PUBLIC_PORTFOLIO_INTEGRATION.md) for contract, isolated configuration and release boundaries.
