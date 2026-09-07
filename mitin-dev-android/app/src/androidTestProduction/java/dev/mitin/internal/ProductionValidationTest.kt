@@ -19,7 +19,10 @@ class ProductionValidationTest {
     private val inst get() = InstrumentationRegistry.getInstrumentation()
     private val device get() = UiDevice.getInstance(inst)
     private val context get() = inst.targetContext
-    private fun waitFor(tag: String) = ui.waitUntil(75_000) { ui.onAllNodesWithTag(tag).fetchSemanticsNodes().isNotEmpty() }
+    private fun waitFor(tag: String) = ui.waitUntil(75_000) {
+        // Returning from Chrome temporarily leaves no resumed Compose root.
+        runCatching { ui.onAllNodesWithTag(tag).fetchSemanticsNodes().isNotEmpty() }.getOrDefault(false)
+    }
     private fun tap(tag: String) {
         waitFor(tag)
         ui.waitUntil(75_000) { ui.onAllNodes(hasTestTag(tag) and isEnabled()).fetchSemanticsNodes().isNotEmpty() }
@@ -107,13 +110,20 @@ class ProductionValidationTest {
                 put("user_messages_acknowledged", messages.all { sent -> state.messages.any { it.role == "user" && it.text == sent } })
                 put("final_sections", JsonArray(state.sections.map { JsonPrimitive(it.title) }))
                 put("assistant_excerpt", state.messages.filter { it.role != "user" }.joinToString("\n---\n") { it.text.take(1500) })
-                put("budget_mvp_excerpt", final.lines().filter { line -> listOf("бюджет","MVP","этап","расход","стоим").any { line.contains(it, true) } }.joinToString("\n").take(1600))
+                val lines = final.lines()
+                val indices = lines.indices.filter { index -> listOf("бюджет","MVP","этап","расход","стоим","срок","следующ").any { lines[index].contains(it, true) } }
+                    .flatMap { index -> (index..minOf(index + 3, lines.lastIndex)).toList() }.distinct().sorted()
+                put("budget_mvp_excerpt", indices.joinToString("\n") { lines[it] }.take(3000))
             }
             tap("brief-to-contact"); waitFor("submission-disabled"); tap("brief-submission-check"); stable()
             waitFor("brief-error"); assertFalse(vm().state!!.submitted); assertNull(vm().state!!.reference)
             ui.onNodeWithText("Заявка отправлена").assertDoesNotExist(); shot("submission-closed-$budget")
+            writeReport(reports)
             if (budget != "unknown") { tap("brief-reset"); stable(); waitFor("brief-start") }
         }
+    }
+
+    private fun writeReport(reports: List<JsonObject>) {
         val report = File(context.getExternalFilesDir(null), "production-evidence.json")
         report.writeText(buildJsonObject {
             put("ai",true); put("submission",false); put("client_auth",false); put("lead_submission_requests",0)
