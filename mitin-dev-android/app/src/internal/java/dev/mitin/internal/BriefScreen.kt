@@ -1,6 +1,11 @@
 package dev.mitin.internal
 
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.relocation.BringIntoViewRequester
+import androidx.compose.foundation.relocation.bringIntoViewRequester
+import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.platform.LocalDensity
+import kotlinx.coroutines.delay
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -77,7 +82,14 @@ val briefBudgets = linkedMapOf("under_10k" to "до 10 000 ₽", "10_20k" to "10
                 state.messages.forEach { message -> ChatBubble(message) }
                 if(state.messages.isEmpty()) Note("Расскажите о задаче: для кого проект и какой результат нужен?")
                 var message by rememberSaveable { mutableStateOf("") }
-                OutlinedTextField(message,{if(it.length<=4000) message=it},label={Text("Сообщение AI")},modifier=Modifier.fillMaxWidth().testTag("brief-message"))
+                val inputPosition = remember { BringIntoViewRequester() }
+                var inputFocused by remember { mutableStateOf(false) }
+                val keyboardHeight = WindowInsets.ime.getBottom(LocalDensity.current)
+                LaunchedEffect(inputFocused, keyboardHeight) {
+                    if (inputFocused && keyboardHeight > 0) { delay(150); inputPosition.bringIntoView() }
+                }
+                OutlinedTextField(message,{if(it.length<=4000) message=it},label={Text("Сообщение AI")},modifier=Modifier.fillMaxWidth()
+                    .bringIntoViewRequester(inputPosition).onFocusChanged { inputFocused = it.isFocused }.testTag("brief-message"))
                 PrimaryAction("Отправить сообщение", "brief-send",!vm.busy && message.isNotBlank()) { dismissInput(); vm.message(message); message="" }
                 if(state.messages.isNotEmpty()) PrimaryAction("Сформировать итоговое ТЗ", "brief-finalize",!vm.busy) { dismissInput(); vm.finalBrief() }
                 if(state.finalBrief != null) {

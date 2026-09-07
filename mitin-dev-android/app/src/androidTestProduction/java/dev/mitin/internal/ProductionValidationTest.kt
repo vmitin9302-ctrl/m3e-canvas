@@ -54,6 +54,7 @@ class ProductionValidationTest {
         assertTrue(caps.ai); assertFalse(caps.submission); assertFalse(caps.auth)
         assertNull((context.applicationContext as InternalApplication).manager)
         ui.onNodeWithText("DIVEEV STUDIO").assertExists()
+        ui.waitUntil(30_000) { ui.onAllNodesWithTag("portfolio-image").fetchSemanticsNodes().size == 2 }
         shot("catalog")
         val reports = mutableListOf<JsonObject>()
         val cases = listOf(null to "under_10k", "diveev-studio" to "10_20k", "ritmassage" to "unknown")
@@ -126,7 +127,8 @@ class ProductionValidationTest {
         assertTrue(vm().state!!.finalBrief!!.length > 100)
         val label = InstrumentationRegistry.getArguments().getString("matrix") ?: "matrix"
         ui.onNodeWithTag("brief-message").performScrollTo().performClick().performTextReplacement("Черновик без отправки")
-        ui.waitForIdle(); shot("$label-keyboard"); device.pressBack(); ui.waitForIdle()
+        Thread.sleep(800); ui.waitForIdle(); ui.onNodeWithTag("brief-message").assertIsDisplayed()
+        shot("$label-keyboard"); device.pressBack(); ui.waitForIdle()
         ui.onNodeWithTag("brief-final").performScrollTo(); shot("$label-final")
         tap("brief-to-contact"); waitFor("submission-disabled"); shot("$label-closed")
         ui.activityRule.scenario.recreate(); ui.waitForIdle(); stable()
