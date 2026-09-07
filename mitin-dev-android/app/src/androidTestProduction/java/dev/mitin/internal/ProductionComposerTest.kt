@@ -9,7 +9,6 @@ import androidx.test.platform.app.InstrumentationRegistry
 import androidx.test.uiautomator.UiDevice
 import dev.mitin.demo.MitinTheme
 import kotlinx.coroutines.runBlocking
-import kotlinx.serialization.json.jsonPrimitive
 import org.junit.Assert.*
 import org.junit.Rule
 import org.junit.Test

@@ -146,7 +146,6 @@ class InternalActivity : ComponentActivity() {
                     verticalArrangement = Arrangement.spacedBy(16.dp)) {
                     when {
                         tab == 0 -> PortfolioScreen(portfolio) { brief.fromPortfolio(portfolio.selectedSlug, (portfolio.detail as? PortfolioState.Success<PortfolioItem>)?.value?.title); tab = 1 }
-                        tab == 1 -> BriefScreen(brief)
                         BuildConfig.FLAVOR == "production" -> PublicCabinet { tab = 1 }
                         !configured -> { BrandHero("МОЙ КАБИНЕТ"); InfoCard("Тестовый сервер не настроен", "Для этой сборки не задан тестовый API. Подключение не выполняется.", true) }
                         auth.profile == null -> {
