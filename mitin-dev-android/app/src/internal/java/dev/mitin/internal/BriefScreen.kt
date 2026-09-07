@@ -49,7 +49,7 @@ val briefBudgets = linkedMapOf("under_10k" to "до 10 000 ₽", "10_20k" to "10
             Note("Бюджет: ${briefBudgets[state.budget] ?: state.budget}")
             if(vm.contactStep && state.finalBrief != null) {
                 Heading("Проверьте заявку")
-                Text(state.finalBrief,modifier=Modifier.testTag("brief-final"))
+                BriefDocument(state.finalBrief,modifier=Modifier.testTag("brief-final"))
                 Note("После явной отправки ТЗ и контакт попадут в CRM MITIN DEV для рассмотрения. Цена и сроки ещё не согласованы.")
                 if (!vm.submissionAvailable) {
                     InfoCard("Отправка пока недоступна", "Ваше ТЗ готово. Приём заявок ещё не активирован — ничего не отправлено в CRM.", tag="submission-disabled")
@@ -83,7 +83,7 @@ val briefBudgets = linkedMapOf("under_10k" to "до 10 000 ₽", "10_20k" to "10
                 if(state.finalBrief != null) {
                     Heading("Итоговое ТЗ")
                     Surface(shape=androidx.compose.foundation.shape.RoundedCornerShape(24.dp), color=MaterialTheme.colorScheme.surfaceContainerLow) {
-                        Text(state.finalBrief,modifier=Modifier.padding(20.dp).testTag("brief-final"),style=MaterialTheme.typography.bodyLarge)
+                        BriefDocument(state.finalBrief,modifier=Modifier.padding(20.dp).testTag("brief-final"))
                     }
                     PrimaryAction("Перейти к отправке заявки", "brief-to-contact",!vm.busy) { dismissInput(); vm.showContact() }
                 }

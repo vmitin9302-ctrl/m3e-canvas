@@ -6,6 +6,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.test.platform.app.InstrumentationRegistry
@@ -31,7 +32,7 @@ class ProductionPresentationTest {
         ui.onNodeWithTag("launch-screen").assertIsDisplayed(); ui.waitForIdle()
         val device = UiDevice.getInstance(inst)
         val file = File(inst.targetContext.getExternalFilesDir(null), "launch.png")
-        device.waitForIdle(); assertTrue(device.takeScreenshot(file))
+        file.outputStream().use { ui.onRoot().captureToImage().asAndroidBitmap().compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it) }
         device.executeShellCommand("mkdir -p /sdcard/Download/mitin-production")
         device.executeShellCommand("cp ${file.absolutePath} /sdcard/Download/mitin-production/launch.png")
         for ((code, text) in listOf(0 to "Нет соединения", 504 to "AI не успел", 401 to "Сессия недоступна", 410 to "Срок сессии", 429 to "Слишком много запросов", 503 to "Не удалось подтвердить")) {

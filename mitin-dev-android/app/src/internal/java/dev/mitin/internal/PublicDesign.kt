@@ -97,8 +97,24 @@ import dev.mitin.demo.*
             Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Text(if(user) "ВЫ" else "MITIN AI", style = MaterialTheme.typography.labelSmall, letterSpacing = 1.5.sp,
                     color = if(user) NeonViolet else NeonBlue)
-                Text(message.text, style = MaterialTheme.typography.bodyLarge)
+                BriefDocument(message.text)
             }
+        }
+    }
+}
+
+/** Native text only: style basic AI Markdown without HTML or clickable remote content. */
+@Composable fun BriefDocument(text: String, modifier: Modifier = Modifier) {
+    Column(modifier, verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        text.split(Regex("\\n\\s*\\n")).filter { it.isNotBlank() }.forEach { paragraph ->
+            val clean = paragraph.trim()
+            val heading = clean.startsWith("#") && clean.lineSequence().first().takeWhile { it == '#' }.length in 1..6
+            val lines = clean.lines()
+            if (heading) {
+                Text(lines.first().trimStart('#', ' '), style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.SemiBold, color = NeonBlue, modifier = Modifier.padding(top = 10.dp))
+                if (lines.size > 1) Text(lines.drop(1).joinToString("\n").replace("**", ""), style = MaterialTheme.typography.bodyLarge)
+            } else Text(clean.replace("**", ""), style = MaterialTheme.typography.bodyLarge)
         }
     }
 }

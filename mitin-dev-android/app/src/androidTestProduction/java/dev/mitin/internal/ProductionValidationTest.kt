@@ -91,6 +91,7 @@ class ProductionValidationTest {
                     if (vm().error != null) tap("brief-retry")
                 }
                 stable(); assertNull("AI request failed", vm().error)
+                assertTrue("Sent user message missing from acknowledged server history", vm().state!!.messages.any { it.role == "user" && it.text == message })
             }
             shot("chat-$budget")
             tap("brief-finalize"); stable(); assertNull("Final generation failed", vm().error)
@@ -102,6 +103,7 @@ class ProductionValidationTest {
             reports += buildJsonObject {
                 put("budget", budget); put("source_portfolio_slug", slug); put("submitted", state.submitted)
                 put("assistant_turns", state.messages.count { it.role != "user" }); put("final_characters", final.length)
+                put("user_messages_acknowledged", messages.all { sent -> state.messages.any { it.role == "user" && it.text == sent } })
                 put("final_sections", JsonArray(state.sections.map { JsonPrimitive(it.title) }))
                 put("assistant_excerpt", state.messages.filter { it.role != "user" }.joinToString("\n---\n") { it.text.take(1500) })
                 put("budget_mvp_excerpt", final.lines().filter { line -> listOf("бюджет","MVP","этап","расход","стоим").any { line.contains(it, true) } }.joinToString("\n").take(1600))
