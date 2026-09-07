@@ -86,6 +86,9 @@ class BriefUiE2ETest {
         waitFor("brief-start");tap("brief-start");waitFor("brief-message")
         ui.onNodeWithTag("brief-message").performScrollTo().performTextInput("Нужен сайт для синтетических клиентов, MVP и запись на услуги")
         tap("brief-send");waitFor("brief-finalize");tap("brief-finalize");waitFor("brief-to-contact")
+        val rotationDevice=UiDevice.getInstance(instrumentation)
+        rotationDevice.setOrientationLeft();ui.waitForIdle()
+        rotationDevice.setOrientationNatural();ui.waitForIdle()
         ui.activityRule.scenario.recreate();ui.waitForIdle();waitFor("brief-to-contact")
         tap("brief-to-contact");waitFor("brief-name")
         ui.onNodeWithTag("brief-name").performScrollTo().performTextInput("Синтетический клиент")
@@ -100,5 +103,20 @@ class BriefUiE2ETest {
         val file=File(instrumentation.targetContext.getExternalFilesDir(null),"brief-$label.png")
         assertTrue(device.takeScreenshot(file));device.executeShellCommand("cp ${file.absolutePath} /sdcard/Download/mitin-network/${file.name}")
         tap("brief-new");waitFor("brief-start")
+    }
+}
+
+/** The host removes/restores adb reverse around these separate OS-process phases. */
+class BriefOfflineUiTest {
+    @get:Rule val ui=createAndroidComposeRule<InternalActivity>()
+    private fun waitFor(tag:String)=ui.waitUntil(60_000) {ui.onAllNodesWithTag(tag).fetchSemanticsNodes().isNotEmpty()}
+    @Test fun persistStartWithoutNetwork() {
+        ui.onNodeWithTag("internal-nav-1").performClick();waitFor("brief-start")
+        ui.onNodeWithTag("brief-start").performScrollTo().performClick();waitFor("brief-error")
+        ui.onNodeWithTag("brief-retry").assertExists()
+    }
+    @Test fun resumePersistedStart() {
+        ui.onNodeWithTag("internal-nav-1").performClick();waitFor("brief-message")
+        ui.onNodeWithTag("brief-reset").performScrollTo().performClick();waitFor("brief-start")
     }
 }

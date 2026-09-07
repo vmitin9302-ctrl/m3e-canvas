@@ -62,7 +62,7 @@ class HttpBriefRepository(baseUrl: String, private val client: OkHttpClient = Ht
                     try {
                         response.use {
                             val source = it.body.source()
-                            if(source.request(1_048_577)) throw BriefFailure(503)
+                            if(source.request(2_097_153)) throw BriefFailure(503)
                             val text = source.readUtf8()
                             if(!it.isSuccessful) {
                                 val code = runCatching { json.parseToJsonElement(text).jsonObject["detail"]?.jsonObject?.get("code")?.jsonPrimitive?.content }.getOrNull()

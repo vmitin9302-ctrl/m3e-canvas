@@ -55,6 +55,7 @@ val briefBudgets = linkedMapOf("under_10k" to "до 10 000 ₽", "10_20k" to "10
                     PrimaryAction("Проверить контакт", "brief-prepare", !vm.busy && name.isNotBlank() && contact.isNotBlank()) { vm.prepare(name,type,contact) }
                 } else {
                     Text("${state.prepared.name}\n${state.prepared.contact}")
+                    SecondaryAction("Изменить контакт", "brief-edit-contact") { vm.editContact() }
                     var consent by rememberSaveable(state.proof) { mutableStateOf(false) }
                     Row { Checkbox(consent,{consent=it},enabled=!vm.busy,modifier=Modifier.testTag("brief-consent")); Text("Согласен на обработку данных") }
                     TextButton(onClick={uri.openUri("https://24promtbot.ru/consent.html")}) { Text("Согласие на обработку данных") }

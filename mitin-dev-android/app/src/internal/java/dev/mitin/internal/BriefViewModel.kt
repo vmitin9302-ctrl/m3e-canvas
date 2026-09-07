@@ -113,6 +113,7 @@ class BriefViewModel(app: Application) : AndroidViewModel(app) {
         put("proof", value.proof ?: ""); put("consent",consent); put("legal_digest",value.legalDigest)
     }) }
     fun showContact() { contactStep=true }
+    fun editContact() { if(!busy) { state=state?.copy(prepared=null,proof=null);contactStep=true } }
     fun discuss() { contactStep=false }
     fun retry() = run { record?.let { recover(it) } }
     fun reset() = run {
