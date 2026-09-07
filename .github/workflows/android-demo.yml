@@ -103,6 +103,10 @@ jobs:
           adb shell settings put global window_animation_scale 0
           adb shell settings put global transition_animation_scale 0
           adb shell settings put global animator_duration_scale 0
+          adb shell settings put secure show_ime_with_hard_keyboard 1
+          test "$(adb shell settings get secure show_ime_with_hard_keyboard | tr -d '\r')" = 1
+          adb shell settings get secure default_input_method > evidence/input-method.txt
+          adb shell ime list -s >> evidence/input-method.txt
           adb shell svc wifi disable
           adb shell svc data disable
           adb shell cmd connectivity airplane-mode enable
