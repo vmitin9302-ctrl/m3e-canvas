@@ -114,7 +114,7 @@ class InternalActivity : ComponentActivity() {
 @Composable fun InternalApp(vm: InternalViewModel = viewModel()) {
     val meta: MetaViewModel = viewModel()
     if (meta.loading) { LaunchScreen(); return }
-    if (meta.failed) { LaunchScreen(failed = true, retry = meta::reload); return }
+    if (meta.failed && BuildConfig.FLAVOR == "production") { LaunchScreen(failed = true, retry = meta::reload); return }
     val portfolio: PortfolioViewModel = viewModel()
     val brief: BriefViewModel = viewModel()
     val configured = vm.manager != null
@@ -129,11 +129,17 @@ class InternalActivity : ComponentActivity() {
     if (auth.restoring) { LaunchScreen(); return }
     Scaffold(Modifier.fillMaxSize().imePadding(), topBar = {
         if (!imeVisible) Surface(color = MaterialTheme.colorScheme.surfaceContainer) {
+            Column {
             Row(Modifier.fillMaxWidth().statusBarsPadding().padding(16.dp), verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 BrandEmblem(36.dp)
                 Column(Modifier.weight(1f)) { Text("MITIN DEV", style = MaterialTheme.typography.titleMedium); Text(if(BuildConfig.FLAVOR == "production") "ПРОЕКТЫ И РАЗРАБОТКА" else "ТЕСТОВОЕ ОКРУЖЕНИЕ", style = MaterialTheme.typography.labelSmall, color = NeonBlue) }
                 if (showSessions) IconButton(onClick = { showSessions = false }, modifier = Modifier.testTag("sessions-back")) { Icon(Icons.Outlined.Close, "Закрыть сессии") }
+            }
+            if (meta.failed) Row(Modifier.fillMaxWidth().padding(horizontal=16.dp),verticalAlignment=Alignment.CenterVertically) {
+                Text("Нет связи с тестовым сервером",Modifier.weight(1f),style=MaterialTheme.typography.bodySmall)
+                TextButton(onClick=meta::reload,modifier=Modifier.testTag("meta-retry")){Text("Повторить")}
+            }
             }
         }
     }, bottomBar = {
