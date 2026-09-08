@@ -193,7 +193,10 @@ class BriefUiE2ETest {
     }
     private fun journey(submit: Boolean) {
         val before=runBlocking(Dispatchers.IO) {count()}
-        tap("internal-nav-0");waitFor("portfolio-ritmassage");tap("portfolio-open-ritmassage");waitFor("portfolio-detail-title");tap("portfolio-discuss")
+        tap("internal-nav-0")
+        // The portfolio ViewModel deliberately retains the selected case across tabs.
+        if(iteration > 1) tap("portfolio-back")
+        waitFor("portfolio-ritmassage");tap("portfolio-open-ritmassage");waitFor("portfolio-detail-title");tap("portfolio-discuss")
         waitFor("brief-start");tap("brief-start");waitFor("brief-message")
         ui.replaceWhenReady("brief-message", "Нужен сайт для синтетических клиентов, MVP и запись на услуги") { ui.activity }
         val revision=ui.runOnIdle { vm.state!!.revision }
