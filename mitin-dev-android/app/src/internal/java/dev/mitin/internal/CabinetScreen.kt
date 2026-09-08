@@ -28,9 +28,11 @@ private val states = mapOf("draft" to "Подготовка", "active" to "В р
     var form by remember(auth.profile?.userId, vm.route) { mutableStateOf<String?>(null) }
     var material by remember(auth.profile?.userId, vm.route) { mutableStateOf<String?>(null) }
     var downloadId by remember(auth.profile?.userId, vm.route) { mutableStateOf<String?>(null) }
+    var selectedClient by remember(auth.profile?.userId, vm.route) {mutableStateOf<JsonObject?>(null)}
     val upload = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri -> if(uri != null && auth.profile != null) vm.uploadUri(uri,material) }
     val download = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/octet-stream")) { uri -> if(uri != null && auth.profile != null) downloadId?.let{vm.saveFile(it,uri)};downloadId=null }
     val ime = WindowInsets.ime.getBottom(LocalDensity.current) > 0
+    selectedClient?.let { client -> AlertDialog(onDismissRequest={selectedClient=null},title={Text("Назначить клиента?")},text={Text("${client.text("name")} получит доступ к проекту и его истории. Предыдущий клиент потеряет доступ.")},confirmButton={TextButton(onClick={selectedClient=null;vm.assign(client.text("id"))}){Text("Назначить")}},dismissButton={TextButton(onClick={selectedClient=null}){Text("Отмена")}}) }
     BackHandler(enabled = !ime && (form != null || vm.route != CabinetRoute())) { if (form != null) form = null else vm.back() }
     Column(Modifier.fillMaxSize().testTag("cabinet")) {
         Column(Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()).padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -46,12 +48,26 @@ private val states = mapOf("draft" to "Подготовка", "active" to "В р
                 if (form != null) CabinetForm(form!!, vm) { form = null }
                 else {
                     if (vm.route.section == "dashboard") {
-                        for (section in if(vm.owner) listOf("projects","leads","clients","inbox","all-payments","all-support","analytics") else listOf("projects","leads","profile"))
-                            SecondaryAction(sections.getValue(section), "cabinet-$section") { vm.open(CabinetRoute(section)) }
+                        for (section in if(vm.owner) listOf("projects","leads","clients","inbox","all-payments","all-support","analytics") else listOf("projects","leads","profile","inbox","all-payments","all-materials","all-support"))
+                            SecondaryAction(sections[section] ?: "Материалы", "cabinet-$section") { vm.open(CabinetRoute(section)) }
                         SecondaryAction("Активные сессии", "cabinet-sessions") { form = "sessions"; authVm.sessions() }
                         SecondaryAction("Выйти", "cabinet-logout") { authVm.logout() }
                     }
                     CabinetDocument(vm.document)
+                    if(vm.route.section == "dashboard") for((key,title) in listOf("expected_actions" to "Ожидаемые действия","latest_updates" to "Последние обновления")) {
+                        Text(title,style=MaterialTheme.typography.titleMedium)
+                        (vm.document[key] as? JsonArray)?.forEach { element -> val event=element.jsonObject
+                            CabinetDocument(event)
+                            SecondaryAction("К проекту","dashboard-${event.text("id")}") {vm.open(CabinetRoute("project",event.text("project_id")))}
+                        }
+                    }
+                    if(vm.route.section == "client") for(section in listOf("projects","leads")) {
+                        Text(sections.getValue(section))
+                        (vm.document[section] as? JsonArray)?.forEach { element -> val item=element.jsonObject
+                            CabinetDocument(item)
+                            SecondaryAction("Открыть", "client-$section-${item.text("id")}") {vm.open(CabinetRoute(if(section=="projects") "project" else "lead",item.text("id")))}
+                        }
+                    }
                     if(vm.route.section == "project") {
                         for(section in listOf("stages","demos","messages","materials","files","financial","payments","expenses","support","events"))
                             SecondaryAction(sections.getValue(section), "project-$section") { vm.open(CabinetRoute(section, project=vm.route.id)) }
@@ -60,8 +76,9 @@ private val states = mapOf("draft" to "Подготовка", "active" to "В р
                         Card(Modifier.fillMaxWidth().testTag("cabinet-item-$index")) { Column(Modifier.padding(16.dp), verticalArrangement=Arrangement.spacedBy(8.dp)) {
                             CabinetDocument(item)
                             when(vm.route.section) {
+                                "assign-lead", "assign-project" -> SecondaryAction("Выбрать клиента","assign-$index") {selectedClient=item}
                                 "projects", "leads", "clients" -> SecondaryAction("Открыть", "open-$index") { vm.open(CabinetRoute(when(vm.route.section){"projects"->"project";"clients"->"client";else->"lead"},item.text("id"))) }
-                                "inbox", "all-payments", "all-support" -> SecondaryAction("К проекту", "open-$index") { vm.open(CabinetRoute("project", item.text("project_id"))) }
+                                "inbox", "all-payments", "all-support", "all-materials" -> SecondaryAction("К проекту", "open-$index") { vm.open(CabinetRoute("project", item.text("project_id"))) }
                                 "demos" -> if(!vm.owner && item["decision"] !is JsonObject) {
                                     var comment by remember { mutableStateOf("") }
                                     Input("Комментарий", comment, "demo-comment-$index") { comment=it }
@@ -79,6 +96,7 @@ private val states = mapOf("draft" to "Подготовка", "active" to "В р
                                     if(vm.owner) for(status in listOf("accepted","needs_replacement","cancelled")) SecondaryAction(states.getValue(status),"material-$status-$index") { vm.changeChild("materials",item.text("id"),buildJsonObject {put("status",status)}) }
                                 }
                                 "files" -> if(item.text("status")=="available") SecondaryAction("Сохранить файл","download-$index") { downloadId=item.text("id");download.launch(item.text("original_name")) }
+                                "payments", "expenses" -> if(vm.owner) SecondaryAction("Изменить запись","edit-$index") {vm.edit(item);form=vm.route.section}
                                 "support" -> if(vm.owner) for(status in listOf("in_progress","waiting_client","resolved","closed")) SecondaryAction(states.getValue(status),"support-$status-$index") { vm.changeChild("support",item.text("id"),buildJsonObject {put("status",status)}) }
                             }
                         } }
@@ -86,8 +104,10 @@ private val states = mapOf("draft" to "Подготовка", "active" to "В р
                     if(vm.status == CabinetStatus.Empty) InfoCard("Здесь пока пусто", "Новые данные появятся после первого действия.")
                     if(vm.route.section=="files") SecondaryAction("Загрузить файл","upload-file") {material=null;upload.launch(arrayOf("text/plain","application/pdf","image/png","image/jpeg"))}
                     val action = when(vm.route.section) {"profile"->"profile";"leads"->if(!vm.owner) "lead" else null;"project"->if(vm.owner) "project" else null;"stages","demos","materials","payments","expenses"->if(vm.owner) vm.route.section else null;"support"->"support";else->null}
-                    if(action != null) PrimaryAction(if(action in setOf("profile","project")) "Редактировать" else "Добавить", "cabinet-add",!vm.busy) { form=action }
+                    if(action != null) PrimaryAction(if(action in setOf("profile","project")) "Редактировать" else "Добавить", "cabinet-add",!vm.busy) { vm.edit(null);form=action }
                     if(vm.route.section == "lead" && vm.owner) PrimaryAction("Создать проект из заявки", "convert-lead",!vm.busy) { vm.convert() }
+                    if(vm.route.section == "lead" && vm.owner) SecondaryAction("Изменить статус заявки","edit-lead") {form="owner-lead"}
+                    if(vm.owner && vm.route.section in setOf("lead","project")) SecondaryAction("Назначить клиента","assign-client") {vm.open(CabinetRoute("assign-${vm.route.section}",vm.route.id))}
                     vm.nextOffset?.let { SecondaryAction("Показать ещё", "cabinet-more") {vm.refresh(true)} }
                     SecondaryAction("Обновить", "cabinet-refresh") { vm.refresh() }
                 }
@@ -130,7 +150,7 @@ private val states = mapOf("draft" to "Подготовка", "active" to "В р
     if(mode == "register") {Input("Имя",name,"cabinet-name"){name=it};Input("Телефон (необязательно)",phone,"cabinet-phone"){phone=it}}
     if(mode in setOf("login","register","password-reset/confirm")) Input("Пароль",password,"cabinet-password",true){password=it}
     if(mode in setOf("verify-email","password-reset/confirm")) Input("Код из письма",token,"cabinet-token",true){token=it}
-    if(mode == "register") {Row {Checkbox(consent,{consent=it});Text("Согласен на обработку данных для регистрации и работы над моими проектами")}}
+    if(mode == "register") {Row {Checkbox(consent,{consent=it},Modifier.testTag("cabinet-consent"));Text("Согласен на обработку данных для регистрации и работы над моими проектами")}}
     PrimaryAction("Продолжить","cabinet-auth-submit",!vm.busy && !auth.busy) {
         if(mode == "login") { auth.login(email,Secret(password));password="" }
         else vm.authAction(mode,buildJsonObject {

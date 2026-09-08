@@ -13,6 +13,7 @@ private data class Field(val key:String,val label:String,val required:Boolean=fa
     val fields = when(kind) {
         "profile"->listOf(Field("name","Имя",true),Field("phone","Телефон"),Field("telegram","Telegram"),Field("city","Город"),Field("company_name","Компания"))
         "lead"->listOf(Field("title","Название задачи",true),Field("service","Услуга",true),Field("description","Описание задачи"))
+        "owner-lead"->listOf(Field("note","Внутренняя заметка владельца"))
         "project"->listOf(Field("title","Название проекта",true),Field("description","Описание"),Field("next_action","Следующее действие"),Field("agreed_price_amount","Согласованная цена, ₽",money=true),Field("planned_start_at","Начало: ГГГГ-ММ-ДД"),Field("planned_finish_at","Завершение: ГГГГ-ММ-ДД"),Field("support_until","Поддержка до: ГГГГ-ММ-ДД"))
         "stages"->listOf(Field("title","Название этапа",true),Field("description","Описание"),Field("client_action_text","Что требуется от клиента"),Field("due_at","Срок: ГГГГ-ММ-ДД"))
         "demos"->listOf(Field("title","Название версии",true),Field("description","Что изменилось"),Field("demo_url","Ссылка на демо (HTTPS)"))
@@ -23,12 +24,13 @@ private data class Field(val key:String,val label:String,val required:Boolean=fa
         else->emptyList()
     }
     val values = remember(kind,vm.route) { mutableStateMapOf<String,String>().also { values -> for(f in fields) {
-        val raw=if(kind in setOf("profile","project")) vm.document.text(f.key) else ""
+        val raw=vm.editRecord?.text(f.key) ?: if(kind in setOf("profile","project")) vm.document.text(f.key) else ""
         values[f.key]=if(f.money && raw.isNotBlank()) raw.toLongOrNull()?.let{java.math.BigDecimal.valueOf(it,2).toPlainString()} ?: "" else if(f.key.endsWith("_at") || f.key == "support_until") raw.take(10) else raw
     } } }
     val choices=when(kind) {
         "profile"->mapOf("legal_status" to listOf("unknown" to "Не указан","individual" to "Физическое лицо","self_employed" to "Самозанятый","individual_entrepreneur" to "ИП","individual_entrepreneur_npd" to "ИП на НПД","llc" to "ООО","other" to "Другое"))
         "lead"->mapOf("budget_range" to listOf("unknown" to "Бюджет не определён","under_10k" to "До 10 000 ₽","10_20k" to "10–20 тыс. ₽","20_40k" to "20–40 тыс. ₽","40_70k" to "40–70 тыс. ₽","70k_plus" to "От 70 тыс. ₽"))
+        "owner-lead"->mapOf("status" to listOf("new" to "Получена","reviewing" to "Рассматриваем","need_info" to "Нужна информация","qualified" to "Квалифицирована","accepted" to "Принята","rejected" to "Не реализуем","archived" to "Архив"))
         "project"->mapOf("status" to listOf("draft" to "Подготовка","active" to "В работе","waiting_client" to "Ожидаем клиента","paused" to "Пауза","completed" to "Завершён","cancelled" to "Отменён","support" to "Поддержка"))
         "stages"->mapOf("status" to listOf("not_started" to "Не начат","in_progress" to "В работе","waiting_client" to "Ожидаем клиента","completed" to "Завершён"))
         "payments"->mapOf("type" to listOf("prepayment" to "Предоплата","payment" to "Оплата","final_payment" to "Финальный платёж","refund" to "Возврат","correction" to "Дополнительное поступление"),"status" to listOf("planned" to "Запланирован","confirmed" to "Подтверждён","cancelled" to "Отменён"))
@@ -36,7 +38,16 @@ private data class Field(val key:String,val label:String,val required:Boolean=fa
         "support"->mapOf("type" to listOf("question" to "Вопрос","bug" to "Ошибка","change" to "Изменение","feature" to "Новая функция"))
         else->emptyMap()
     }
-    val selected=remember(kind,vm.route) { mutableStateMapOf<String,String>().also { for((key,options) in choices) it[key]=vm.document.text(key).takeIf { value->options.any{p->p.first==value} } ?: options.first().first } }
+    val selected=remember(kind,vm.route) { mutableStateMapOf<String,String>().also { for((key,options) in choices) it[key]=(vm.editRecord ?: vm.document).text(key).takeIf { value->options.any{p->p.first==value} } ?: options.first().first } }
+    var submitted by remember {mutableStateOf(false)}
+    var observedBusy by remember {mutableStateOf(false)}
+    LaunchedEffect(vm.busy,vm.status,submitted) {
+        if(submitted && vm.busy) observedBusy=true
+        if(submitted && observedBusy && !vm.busy) {
+            if(vm.status in setOf(CabinetStatus.Success,CabinetStatus.Empty)) close()
+            submitted=false;observedBusy=false
+        }
+    }
     var error by remember {mutableStateOf<String?>(null)}
     var clientAction by remember {mutableStateOf(false)}
     var archived by remember {mutableStateOf(vm.document["archived_at"] is JsonPrimitive)}
@@ -65,8 +76,8 @@ private data class Field(val key:String,val label:String,val required:Boolean=fa
                 if(kind=="stages") {put("position",vm.items.size);put("client_action_required",clientAction)}
                 if(kind=="project")put("archived",archived)
             }
-            when(kind){"profile"->vm.saveProfile(data);"lead"->vm.createLead(data);"project"->vm.saveProject(data);else->vm.createChild(kind,data)}
-            close()
+            submitted=true
+            when(kind){"profile"->vm.saveProfile(data);"lead"->vm.createLead(data);"owner-lead"->vm.patchLead(data);"project"->vm.saveProject(data);else->vm.editRecord?.let{vm.changeChild(kind,it.text("id"),data)} ?: vm.createChild(kind,data)}
         } catch(_:Exception) {error="Заполните обязательные поля. Сумму укажите в рублях, дату — ГГГГ-ММ-ДД."}
     }
     SecondaryAction("Отмена","cabinet-form-cancel",close)

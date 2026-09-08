@@ -29,6 +29,8 @@ class CabinetViewModel(app: Application) : AndroidViewModel(app) {
     private var job: Job? = null
     private val history = mutableListOf<CabinetRoute>()
     private var pendingMessage: Pair<String,String>? = null
+    var editRecord by mutableStateOf<JsonObject?>(null); private set
+    fun edit(value:JsonObject?) { editRecord=value }
 
     init {
         viewModelScope.launch {
@@ -36,7 +38,7 @@ class CabinetViewModel(app: Application) : AndroidViewModel(app) {
                 if (userId != auth.profile?.userId) {
                     job?.cancel(); userId = auth.profile?.userId; owner = auth.profile?.role == "owner"
                     document = JsonObject(emptyMap()); items = emptyList(); history.clear(); route = CabinetRoute()
-                    nextOffset = null; notice = null; pendingMessage = null; busy = false
+                    nextOffset = null; notice = null; pendingMessage = null; editRecord=null; busy = false
                     if (auth.profile != null) refresh() else status = CabinetStatus.Unauthorized
                 }
             }
@@ -48,11 +50,13 @@ class CabinetViewModel(app: Application) : AndroidViewModel(app) {
         "lead" -> prefix()+"leads/${target.id}"
         "project" -> prefix()+"projects/${target.id}"
         "client" -> "owner/clients/${target.id}"
+        "assign-lead", "assign-project" -> "owner/clients"
         "stages", "demos", "messages", "materials", "files", "payments", "expenses", "support", "events" -> prefix()+"projects/${target.project}/${target.section}"
         "financial" -> prefix()+"projects/${target.project}/financial-summary"
-        "inbox" -> "owner/messages"
-        "all-payments" -> "owner/payments"
-        "all-support" -> "owner/support"
+        "inbox" -> prefix()+"messages"
+        "all-payments" -> prefix()+"payments"
+        "all-support" -> prefix()+"support"
+        "all-materials" -> "materials"
         else -> prefix()+target.section
     }
     private fun run(action: suspend () -> Unit) {
@@ -72,7 +76,7 @@ class CabinetViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
     private suspend fun load(more: Boolean = false) {
-        val list = route.section in setOf("leads","projects","clients","stages","demos","messages","materials","files","payments","expenses","support","events","inbox","all-payments","all-support")
+        val list = route.section in setOf("leads","projects","clients","assign-lead","assign-project","stages","demos","messages","materials","files","payments","expenses","support","events","inbox","all-payments","all-support","all-materials")
         val data = repository.read(path(route), if(list) (if(more) nextOffset ?: return else 0) else null)
         if (list) {
             val fetched = data["items"]!!.jsonArray.map { it.jsonObject }
@@ -104,6 +108,15 @@ class CabinetViewModel(app: Application) : AndroidViewModel(app) {
         history.add(route); route = CabinetRoute("lead", result.text("id")); load()
     }
     fun patchLead(data: JsonObject) = run { repository.mutate("owner/leads/${route.id}", "PATCH", data); load() }
+    fun assign(profileId:String) = run {
+        val target=history.last()
+        val data=buildJsonObject {
+            put("client_profile_id",profileId)
+            if(route.section=="assign-project") put("version",repository.read("owner/projects/${target.id}")["version"]!!)
+        }
+        repository.mutate("owner/"+(if(route.section=="assign-project") "projects/" else "leads/")+target.id,"PATCH",data)
+        route=history.removeAt(history.lastIndex);load()
+    }
     fun convert() = run {
         val result = repository.mutate("owner/leads/${route.id}/project", "POST", buildJsonObject { put("title", document.text("business")) })
         history.add(route); route = CabinetRoute("project", result.text("id")); load()
