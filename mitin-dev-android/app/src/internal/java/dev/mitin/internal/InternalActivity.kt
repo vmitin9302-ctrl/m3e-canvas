@@ -114,7 +114,7 @@ class InternalActivity : ComponentActivity() {
 @Composable fun InternalApp(vm: InternalViewModel = viewModel()) {
     val meta: MetaViewModel = viewModel()
     if (meta.loading) { LaunchScreen(); return }
-    if (meta.failed) { LaunchScreen(failed = true, retry = meta::reload); return }
+    if (meta.failed && BuildConfig.FLAVOR == "production") { LaunchScreen(failed = true, retry = meta::reload); return }
     val portfolio: PortfolioViewModel = viewModel()
     val brief: BriefViewModel = viewModel()
     val configured = vm.manager != null
@@ -129,11 +129,17 @@ class InternalActivity : ComponentActivity() {
     if (auth.restoring) { LaunchScreen(); return }
     Scaffold(Modifier.fillMaxSize().imePadding(), topBar = {
         if (!imeVisible) Surface(color = MaterialTheme.colorScheme.surfaceContainer) {
+            Column {
             Row(Modifier.fillMaxWidth().statusBarsPadding().padding(16.dp), verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 BrandEmblem(36.dp)
                 Column(Modifier.weight(1f)) { Text("MITIN DEV", style = MaterialTheme.typography.titleMedium); Text(if(BuildConfig.FLAVOR == "production") "ПРОЕКТЫ И РАЗРАБОТКА" else "ТЕСТОВОЕ ОКРУЖЕНИЕ", style = MaterialTheme.typography.labelSmall, color = NeonBlue) }
                 if (showSessions) IconButton(onClick = { showSessions = false }, modifier = Modifier.testTag("sessions-back")) { Icon(Icons.Outlined.Close, "Закрыть сессии") }
+            }
+            if (meta.failed) Row(Modifier.fillMaxWidth().padding(horizontal=16.dp),verticalAlignment=Alignment.CenterVertically) {
+                Text("Нет связи с тестовым сервером",Modifier.weight(1f),style=MaterialTheme.typography.bodySmall)
+                TextButton(onClick=meta::reload,modifier=Modifier.testTag("meta-retry")){Text("Повторить")}
+            }
             }
         }
     }, bottomBar = {
@@ -142,6 +148,7 @@ class InternalActivity : ComponentActivity() {
         Box(Modifier.fillMaxSize().background(BrandBackground).padding(padding), contentAlignment = Alignment.TopCenter) {
             key(auth.profile?.userId, tab, showSessions) {
                 if (tab == 1) BriefScreen(brief)
+                else if (tab == 2 && configured && (vm.getApplication<InternalApplication>().capabilities?.cabinet == true)) CabinetScreen(vm)
                 else Column(Modifier.widthIn(max = 600.dp).fillMaxWidth().fillMaxHeight().verticalScroll(rememberScrollState()).padding(20.dp),
                     verticalArrangement = Arrangement.spacedBy(16.dp)) {
                     when {
@@ -185,7 +192,7 @@ class InternalActivity : ComponentActivity() {
                             BrandHero("МОЙ КАБИНЕТ")
                             val profile = auth.profile!!
                             InfoCard(profile.displayName, "Клиент · профиль подтверждён ответом тестового сервера", true, "server-profile")
-                            Detail("ID профиля", profile.clientProfileId)
+                            Detail("ID профиля", profile.clientProfileId ?: "Владелец")
                             ActionRow("Мои сессии", "Устройства и управление доступом", Icons.Outlined.Devices, "open-sessions") { showSessions = true; vm.sessions() }
                             SecondaryAction("Обновить профиль", "profile-reload") { vm.profile() }
                             SecondaryAction("Выйти", "network-logout") { vm.logout() }

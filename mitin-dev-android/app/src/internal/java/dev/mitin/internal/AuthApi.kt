@@ -23,7 +23,7 @@ class TokenPair(val access: Secret, val refresh: Secret, val expiresIn: Int) {
 }
 @Serializable data class Me(
     @SerialName("user_id") val userId: String,
-    @SerialName("client_profile_id") val clientProfileId: String,
+    @SerialName("client_profile_id") val clientProfileId: String?,
     @SerialName("display_name") val displayName: String,
     val role: String
 )
@@ -143,8 +143,9 @@ class HttpAuthApi(baseUrl: String, private val client: OkHttpClient = secureClie
     override suspend fun me(access: Secret, epoch: Long): Me {
         val text = request("me", "GET", epoch, access)
         return try { json.decodeFromString<Me>(text).also {
-            UUID.fromString(it.userId); UUID.fromString(it.clientProfileId)
-            if (it.role != "client" || it.displayName.length !in 1..200) throw AuthFailure()
+            UUID.fromString(it.userId); it.clientProfileId?.let(UUID::fromString)
+            if (it.role !in setOf("client", "owner") || (it.role == "client" && it.clientProfileId == null) ||
+                (it.role == "owner" && BuildConfig.FLAVOR == "production") || it.displayName.length !in 1..200) throw AuthFailure()
         } } catch (_: Exception) { throw AuthFailure() }
     }
     override suspend fun sessions(access: Secret, epoch: Long, offset: Int): SessionPage {

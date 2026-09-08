@@ -23,6 +23,27 @@ class BriefViewModel @JvmOverloads constructor(app: Application, private val rep
     var portfolioTitle by mutableStateOf<String?>(null); private set
     var contactStep by mutableStateOf(false); private set
     var canRetry by mutableStateOf(false); private set
+    // Content-free transport evidence, also useful when an operation is ambiguous.
+    var lastNetworkCategory = "none"; private set
+    var acknowledgedRevision: Int? = null; private set
+    var messageInvocations = 0; private set
+    private suspend fun network(action: suspend () -> BriefState): BriefState {
+        lastNetworkCategory = "in_flight"
+        try {
+            return action().also { acknowledgedRevision = it.revision; lastNetworkCategory = "success" }
+        } catch (e: Exception) {
+            lastNetworkCategory = when (e) {
+                is CancellationException -> "cancelled"
+                is BriefFailure -> when (e.status) {
+                    0 -> "offline"
+                    504 -> "timeout"
+                    else -> "http_${e.status}"
+                }
+                else -> "transport_or_decode"
+            }
+            throw e
+        }
+    }
     init { run { record = store.read(); record?.let { recover(it) } } }
     private fun run(action: suspend () -> Unit) {
         if(busy) return
@@ -67,7 +88,7 @@ class BriefViewModel @JvmOverloads constructor(app: Application, private val rep
         }
         val next = BriefRecord(id, secret, body, "sessions", body)
         store.save(next); record = next
-        accept(repository.execute(next))
+        accept(network { repository.execute(next) })
     }
     private suspend fun accept(value: BriefState) {
         val updated = record!!.copy(pendingPath = null, pendingBody = null)
@@ -78,19 +99,19 @@ class BriefViewModel @JvmOverloads constructor(app: Application, private val rep
     private suspend fun recover(current: BriefRecord) {
         if (capabilities?.ai != true) throw BriefFailure(404)
         val api = repository ?: throw BriefFailure(404)
-        val value = try { api.get(current) } catch(e: BriefFailure) {
+        val value = try { network { api.get(current) } } catch(e: BriefFailure) {
             if(e.status == 410) {
                 val expired = current.copy(pendingPath=null,pendingBody=null)
                 store.save(expired); record=expired
             }
-            if(e.status == 404 && current.pendingPath == "sessions") { accept(api.execute(current)); return } else throw e
+            if(e.status == 404 && current.pendingPath == "sessions") { accept(network { api.execute(current) }); return } else throw e
         }
         state = value
         contactStep = value.prepared != null && !value.submitted
         if(value.submitted || (current.pendingBody?.get("revision")?.jsonPrimitive?.intOrNull?.let { value.revision > it } == true) || current.pendingPath == "sessions") accept(value)
         else if(current.pendingPath != null) {
             if(value.pending) throw BriefFailure(409, "ai_pending")
-            accept(api.execute(current))
+            accept(network { api.execute(current) })
         }
     }
     private fun command(path: String, extra: JsonObject = JsonObject(emptyMap())) = run {
@@ -105,7 +126,7 @@ class BriefViewModel @JvmOverloads constructor(app: Application, private val rep
         }
         val next = existing.copy(pendingPath = "sessions/${existing.id}/$path", pendingBody = body)
         store.save(next); record = next
-        try { accept(repository!!.execute(next)) }
+        try { accept(network { repository!!.execute(next) }) }
         catch(e: BriefFailure) {
             if(e.status in setOf(410, 422, 429)) {
                 // These responses explicitly reject the operation before a commit.
@@ -114,7 +135,7 @@ class BriefViewModel @JvmOverloads constructor(app: Application, private val rep
             throw e
         }
     }
-    fun message(text: String) = command("messages", buildJsonObject { put("message", text) })
+    fun message(text: String) { messageInvocations++; command("messages", buildJsonObject { put("message", text) }) }
     fun finalBrief() = command("final")
     fun prepare(name: String, type: String, contact: String) = command("prepare", buildJsonObject {
         put("name",name); put("contact_type",type); put("contact",contact)

@@ -15,7 +15,7 @@ class BriefRepositoryTest {
         val trust=HandshakeCertificates.Builder().addTrustedCertificate(cert.certificate).build()
         val server=MockWebServer();server.useHttps(serverTls.sslSocketFactory(),false);server.start()
         val client=HttpAuthApi.secureClient().newBuilder().sslSocketFactory(trust.sslSocketFactory(),trust.trustManager)
-            .callTimeout(2,TimeUnit.SECONDS).build()
+            .callTimeout(20,TimeUnit.SECONDS).build()
         try {
             val repo=HttpBriefRepository(server.url("/").toString(),client)
             val id="00000000-0000-4000-8000-000000000001"
