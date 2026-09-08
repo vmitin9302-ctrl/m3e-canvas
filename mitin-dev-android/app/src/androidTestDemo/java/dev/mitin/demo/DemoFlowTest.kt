@@ -68,7 +68,16 @@ class DemoFlowTest {
         assertEquals(PackageManager.PERMISSION_DENIED, context.checkSelfPermission(Manifest.permission.INTERNET))
         shot("01-client-welcome")
         tap("create-request"); tap("type-0"); screen("c-brief"); shot("02-client-brief")
-        ui.onNodeWithTag("task").performTextReplacement("Сайт для вымышленного автосервиса")
+        ui.onNodeWithTag("task").performScrollTo().performClick().performTextReplacement("Сайт для вымышленного автосервиса")
+        // Wait for the real IME before dismissing it: a late inset update can
+        // otherwise move the scrolled Next button after the test locates it.
+        ui.waitUntil(10_000) {
+            ViewCompat.getRootWindowInsets(ui.activity.window.decorView)?.isVisible(WindowInsetsCompat.Type.ime()) == true
+        }
+        device.pressBack()
+        ui.waitUntil(10_000) {
+            ViewCompat.getRootWindowInsets(ui.activity.window.decorView)?.isVisible(WindowInsetsCompat.Type.ime()) == false
+        }
         tap("brief-next"); tap("budget"); top("budget-option-3")
         tap("review"); screen("c-review")
         ui.onNodeWithText("40–70 тыс.").assertExists()
