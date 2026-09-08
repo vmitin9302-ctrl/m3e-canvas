@@ -162,7 +162,14 @@ class CabinetUiE2ETest {
         runBlocking{manager.logout()}
         waitFor("cabinet-email")
         val email="cabinet-${UUID.randomUUID()}@example.test"
-        tap("auth-register");fill("cabinet-email",email);fill("cabinet-name","Синтетический клиент");fill("cabinet-password",TEST_PASSWORD);fill("cabinet-password-repeat",TEST_PASSWORD);hideKeyboard();tap("cabinet-consent");tap("cabinet-terms");tap("cabinet-auth-submit")
+        tap("auth-register");fill("cabinet-email",email);fill("cabinet-name","Синтетический клиент");fill("cabinet-password",TEST_PASSWORD)
+        hideKeyboard();ui.onNodeWithTag("cabinet-auth-submit").assertIsNotEnabled()
+        fill("cabinet-password-repeat",TEST_PASSWORD);hideKeyboard();tap("cabinet-consent");tap("cabinet-terms")
+        try {
+            runBlocking(Dispatchers.IO){fault("offline")};tap("cabinet-auth-submit");waitFor("cabinet-notice")
+            ui.onNodeWithText("Нет связи с сервисом. Проверьте подключение.").assertExists();shot("registration-offline")
+        } finally { runBlocking(Dispatchers.IO){fault("none")} }
+        tap("cabinet-auth-submit")
         waitFor("cabinet-token")
         ui.activityRule.scenario.recreate();ui.waitForIdle();waitFor("cabinet-token")
         fill("cabinet-token",runBlocking(Dispatchers.IO){mailCode(email)});hideKeyboard();tap("cabinet-auth-submit")
