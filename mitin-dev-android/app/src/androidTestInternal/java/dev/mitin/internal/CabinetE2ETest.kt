@@ -21,6 +21,8 @@ private fun mailCode(email:String,purpose:String="verify_email"):String = HttpAu
     .post(obj("email" to email,"purpose" to purpose).toString().toRequestBody("application/json".toMediaType())).build()).execute().use {
         check(it.isSuccessful);Json.parseToJsonElement(it.body.string()).jsonObject.text("token")
     }
+private fun fault(mode:String) {HttpAuthApi.secureClient().newCall(Request.Builder().url(ORIGIN+"test/cabinet-fault")
+    .post(obj("mode" to mode).toString().toRequestBody("application/json".toMediaType())).build()).execute().use{check(it.isSuccessful)}}
 private suspend fun register(api:CabinetApi,email:String) {
     api.call("auth/register","POST",body=buildJsonObject {put("name","Синтетический клиент кабинета");put("email",email);put("password",TEST_PASSWORD);put("consent",true)})
     api.call("auth/verify-email","POST",body=obj("token" to withContext(Dispatchers.IO){mailCode(email)}))
@@ -63,7 +65,7 @@ class CabinetNetworkE2ETest {
             val material=admin.mutate("$own/materials","POST",obj("title" to "Тексты"))
             val file=client.upload(id,"android.txt","text/plain","Synthetic Android material".toByteArray(),material.text("id"))
             assertArrayEquals("Synthetic Android material".toByteArray(),client.download(id,file.text("id")))
-            admin.mutate(own,"PATCH",buildJsonObject{put("version",1);put("agreed_price_amount",1000000)})
+            admin.mutate(own,"PATCH",buildJsonObject{put("version",1);put("agreed_price_amount",1000000);put("status","active")})
             admin.mutate("$own/payments","POST",buildJsonObject{put("amount_minor",400000);put("type","prepayment");put("status","confirmed")})
             admin.mutate("$own/expenses","POST",buildJsonObject{put("title","Хостинг");put("amount_minor",50000);put("category","infrastructure");put("recurrence","monthly");put("status","confirmed")})
             assertEquals(600000L,client.read("$path/financial-summary").number("balance_amount"))
@@ -91,6 +93,11 @@ class CabinetUiE2ETest {
     private val instrumentation get()=InstrumentationRegistry.getInstrumentation()
     private val manager get()=(ui.activity.application as InternalApplication).manager!!
     private val device get()=UiDevice.getInstance(instrumentation)
+    private fun imeVisible():Boolean {
+        var visible=false
+        instrumentation.runOnMainSync {visible=androidx.core.view.ViewCompat.getRootWindowInsets(ui.activity.window.decorView)?.isVisible(androidx.core.view.WindowInsetsCompat.Type.ime())==true}
+        return visible
+    }
     private fun waitFor(tag:String)=ui.waitUntil(60_000){ui.onAllNodesWithTag(tag).fetchSemanticsNodes().isNotEmpty()}
     private fun tap(tag:String) {
         ui.waitUntil(60_000){ui.onAllNodesWithTag("cabinet-loading").fetchSemanticsNodes().isEmpty()}
@@ -102,16 +109,17 @@ class CabinetUiE2ETest {
     private fun fill(tag:String,value:String) {
         waitFor(tag);val node=ui.onNodeWithTag(tag)
         if(ui.onAllNodes(hasTestTag(tag) and hasAnyAncestor(hasScrollAction())).fetchSemanticsNodes().isNotEmpty())node.performScrollTo()
-        node.performTextReplacement(value);ui.waitForIdle()
+        node.performClick().performTextReplacement(value);ui.waitForIdle();ui.waitUntil(10_000){imeVisible()}
     }
-    private fun hideKeyboard() {device.pressBack();ui.waitForIdle()}
+    private fun hideKeyboard() {if(imeVisible()) {device.pressBack();ui.waitUntil(10_000){!imeVisible()}};ui.waitForIdle()}
     private fun shot(stage:String) {
+        ui.waitForIdle();device.waitForIdle()
         val label=InstrumentationRegistry.getArguments().getString("portfolioCase") ?: "cabinet"
         val file=File(instrumentation.targetContext.getExternalFilesDir(null),"cabinet-$label-$stage.png")
         assertTrue(device.takeScreenshot(file));device.executeShellCommand("mkdir -p /sdcard/Download/mitin-network")
         device.executeShellCommand("cp ${file.absolutePath} /sdcard/Download/mitin-network/${file.name}")
     }
-    private fun login(email:String) {fill("cabinet-email",email);fill("cabinet-password",TEST_PASSWORD);hideKeyboard();tap("cabinet-auth-submit");waitFor("cabinet-projects")}
+    private fun login(email:String) {fill("cabinet-email",email);fill("cabinet-password",TEST_PASSWORD);hideKeyboard();tap("cabinet-auth-submit");waitFor("cabinet-projects");waitFor("cabinet-summary")}
     @Test fun registrationProjectMessagesOwnerAndRecreation() {
         runBlocking{manager.logout()}
         waitFor("cabinet-email")
@@ -138,7 +146,8 @@ class CabinetUiE2ETest {
             owner.logout();store.clear();scope.cancel();p
         }
         tap("cabinet-back");tap("cabinet-back");tap("cabinet-projects");tap("open-0");shot("project")
-        tap("project-messages");fill("project-message","Сообщение с клавиатурой. ".repeat(10));shot("message-ime");hideKeyboard()
+        tap("project-messages");fill("project-message","Сообщение с клавиатурой. ".repeat(10))
+        ui.waitUntil(10_000){imeVisible()};ui.onNodeWithTag("send-project-message").assertIsDisplayed();shot("message-ime");hideKeyboard()
         ui.onNodeWithTag("project-message").assertExists();tap("send-project-message")
         ui.waitUntil(60_000){ui.onAllNodesWithTag("cabinet-item-0").fetchSemanticsNodes().isNotEmpty()}
         ui.activityRule.scenario.recreate();ui.waitForIdle();waitFor("project-message");shot("message-recreated")
@@ -151,5 +160,18 @@ class CabinetUiE2ETest {
         ui.waitUntil(60_000){ui.onAllNodesWithTag("cabinet-save").fetchSemanticsNodes().isEmpty()}
         tap("cabinet-back");tap("cabinet-back");tap("cabinet-back");tap("cabinet-logout");waitFor("cabinet-email")
         assertNull(manager.state.value.profile)
+        login(CLIENT_A)
+        try {
+            runBlocking(Dispatchers.IO){fault("forbidden")};tap("cabinet-projects");waitFor("cabinet-notice")
+            ui.onNodeWithText("Действие недоступно.").assertExists();shot("forbidden")
+            runBlocking(Dispatchers.IO){fault("offline")};tap("cabinet-refresh");waitFor("cabinet-notice")
+            ui.onNodeWithText("Нет связи с сервисом. Проверьте подключение.").assertExists();shot("offline")
+            runBlocking(Dispatchers.IO){fault("error")};tap("cabinet-refresh");waitFor("cabinet-notice");shot("error")
+            runBlocking(Dispatchers.IO){fault("none")};tap("cabinet-refresh")
+            ui.waitUntil(60_000){ui.onAllNodesWithTag("cabinet-loading").fetchSemanticsNodes().isEmpty()}
+            ui.onNodeWithText("Здесь пока пусто").assertExists();shot("empty")
+            runBlocking(Dispatchers.IO){fault("unauthorized")};tap("cabinet-refresh");waitFor("cabinet-email")
+            assertNull(manager.state.value.profile);ui.onAllNodesWithTag("cabinet-item-0").assertCountEquals(0);shot("unauthorized")
+        } finally {runBlocking(Dispatchers.IO){fault("none")}}
     }
 }

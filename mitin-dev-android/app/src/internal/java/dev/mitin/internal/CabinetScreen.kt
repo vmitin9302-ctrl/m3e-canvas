@@ -9,10 +9,13 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.Send
+import androidx.compose.material.icons.outlined.*
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.Alignment
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
@@ -28,6 +31,7 @@ private val states = mapOf("draft" to "Подготовка", "active" to "В р
 
 @Composable fun CabinetScreen(authVm: InternalViewModel, vm: CabinetViewModel = viewModel()) {
     val auth = authVm.manager!!.state.collectAsStateWithLifecycle().value
+    val uriHandler=LocalUriHandler.current
     var form by vm::form
     var material by remember(auth.profile?.userId, vm.route) { mutableStateOf<String?>(null) }
     var downloadId by remember(auth.profile?.userId, vm.route) { mutableStateOf<String?>(null) }
@@ -35,28 +39,46 @@ private val states = mapOf("draft" to "Подготовка", "active" to "В р
     val upload = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri -> if(uri != null && auth.profile != null) vm.uploadUri(uri,material) }
     val download = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/octet-stream")) { uri -> if(uri != null && auth.profile != null) downloadId?.let{vm.saveFile(it,uri)};downloadId=null }
     val ime = WindowInsets.ime.getBottom(LocalDensity.current) > 0
-    selectedClient?.let { client -> AlertDialog(onDismissRequest={selectedClient=null},title={Text("Назначить клиента?")},text={Text("${client.text("name")} получит доступ к проекту и его истории. Предыдущий клиент потеряет доступ.")},confirmButton={TextButton(onClick={selectedClient=null;vm.assign(client.text("id"))}){Text("Назначить")}},dismissButton={TextButton(onClick={selectedClient=null}){Text("Отмена")}}) }
+    selectedClient?.let { client -> AlertDialog(onDismissRequest={selectedClient=null},title={Text("Назначить клиента?")},text={Text(if(vm.route.section=="assign-project") "${client.text("name")} получит доступ к проекту и его истории. Предыдущий клиент потеряет доступ." else "Заявка будет связана с клиентом ${client.text("name")}. Он получит доступ к ней.")},confirmButton={TextButton(onClick={selectedClient=null;vm.assign(client.text("id"))}){Text("Назначить")}},dismissButton={TextButton(onClick={selectedClient=null}){Text("Отмена")}}) }
     BackHandler(enabled = !ime && (form != null || vm.route != CabinetRoute())) { if (form != null) form = null else vm.back() }
     Column(Modifier.fillMaxSize().testTag("cabinet")) {
         Column(Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()).padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            Heading(if(auth.profile == null) "Личный кабинет" else if(vm.owner) "Кабинет владельца" else "Ваши проекты")
-            vm.notice?.let { InfoCard("Уведомление", it) }
+            Heading(if(auth.profile == null) "Личный кабинет" else if(vm.route.section=="dashboard") {if(vm.owner) "Кабинет владельца" else "Ваши проекты"} else sections[vm.route.section] ?: "Выберите клиента")
+            vm.notice?.let { InfoCard("Уведомление", it,tag="cabinet-notice") }
+            auth.message?.let {InfoCard("Вход",it)}
             authVm.error?.let { InfoCard("Вход", it) }
             if (auth.profile == null) {
                 CabinetAuth(authVm, vm)
             } else {
-                Text(sections[vm.route.section] ?: "Кабинет", style = MaterialTheme.typography.titleLarge)
                 if (vm.route != CabinetRoute()) SecondaryAction("Назад", "cabinet-back") { vm.back() }
                 if (vm.busy) LinearProgressIndicator(Modifier.fillMaxWidth().testTag("cabinet-loading"))
                 if (form != null) CabinetForm(form!!, vm) { form = null }
                 else {
                     if (vm.route.section == "dashboard") {
-                        for (section in if(vm.owner) listOf("projects","leads","clients","inbox","all-payments","all-support","analytics") else listOf("projects","leads","profile","inbox","all-payments","all-materials","all-support"))
-                            SecondaryAction(sections[section] ?: "Материалы", "cabinet-$section") { vm.open(CabinetRoute(section)) }
+                        if(vm.document.isNotEmpty()) Column(Modifier.testTag("cabinet-summary"),verticalArrangement=Arrangement.spacedBy(8.dp)) {
+                            for(key in listOf("active_projects","new_messages","client_actions")) if(vm.document.containsKey(key))
+                                Surface(Modifier.fillMaxWidth(),shape=RoundedCornerShape(20.dp),color=MaterialTheme.colorScheme.surfaceContainerLow) {
+                                    Row(Modifier.padding(16.dp),verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(12.dp)) {
+                                        Text(labels.getValue(key),Modifier.weight(1f),style=MaterialTheme.typography.bodyLarge)
+                                        Text(vm.document.text(key),style=MaterialTheme.typography.headlineMedium,color=MaterialTheme.colorScheme.primary)
+                                    }
+                                }
+                        }
+                        val menu=if(vm.owner) listOf("projects","leads","clients","inbox","all-payments","all-support","analytics") else listOf("projects","leads","profile","inbox","all-payments","all-materials","all-support")
+                        val columns=if(LocalDensity.current.fontScale>=1.4f)1 else 2
+                        for(group in menu.chunked(columns)) Row(horizontalArrangement=Arrangement.spacedBy(12.dp)) {
+                            for(section in group) OutlinedCard(onClick={vm.open(CabinetRoute(section))},enabled=!vm.busy,modifier=Modifier.weight(1f).testTag("cabinet-$section"),shape=RoundedCornerShape(20.dp)) {
+                                Column(Modifier.fillMaxWidth().padding(16.dp),verticalArrangement=Arrangement.spacedBy(12.dp)) {
+                                    Icon(when(section){"projects"->Icons.Outlined.Folder;"leads"->Icons.Outlined.Description;"profile"->Icons.Outlined.Person;"clients"->Icons.Outlined.People;"inbox"->Icons.Outlined.ChatBubbleOutline;"all-payments"->Icons.Outlined.Payments;"all-materials"->Icons.Outlined.AttachFile;"analytics"->Icons.Outlined.QueryStats;else->Icons.Outlined.SupportAgent},contentDescription=null,tint=MaterialTheme.colorScheme.primary)
+                                    Text(sections[section] ?: "Материалы",style=MaterialTheme.typography.titleMedium)
+                                }
+                            }
+                            if(columns==2 && group.size==1) Spacer(Modifier.weight(1f))
+                        }
                         SecondaryAction("Активные сессии", "cabinet-sessions") { form = "sessions"; authVm.sessions() }
                         SecondaryAction("Выйти", "cabinet-logout") { authVm.logout() }
                     }
-                    CabinetDocument(vm.document)
+                    CabinetDocument(if(vm.route.section=="dashboard") JsonObject(vm.document.filterKeys{it !in setOf("active_projects","new_messages","client_actions")}) else vm.document)
                     if(vm.route.section == "dashboard") for((key,title) in listOf("expected_actions" to "Ожидаемые действия","latest_updates" to "Последние обновления")) {
                         Text(title,style=MaterialTheme.typography.titleMedium)
                         (vm.document[key] as? JsonArray)?.forEach { element -> val event=element.jsonObject
@@ -71,6 +93,12 @@ private val states = mapOf("draft" to "Подготовка", "active" to "В р
                             SecondaryAction("Открыть", "client-$section-${item.text("id")}") {vm.open(CabinetRoute(if(section=="projects") "project" else "lead",item.text("id")))}
                         }
                     }
+                    if(vm.route.section == "client") (vm.document["support_requests"] as? JsonArray)?.let { requests ->
+                        Text("Последние обращения поддержки: ${requests.size}")
+                        for(element in requests) {val request=element.jsonObject;CabinetDocument(request)
+                            SecondaryAction("К проекту","client-support-${request.text("id")}"){vm.open(CabinetRoute("project",request.text("project_id")))}
+                        }
+                    }
                     if(vm.route.section == "project") {
                         for(section in listOf("stages","demos","messages","materials","files","financial","payments","expenses","support","events"))
                             SecondaryAction(sections.getValue(section), "project-$section") { vm.open(CabinetRoute(section, project=vm.route.id)) }
@@ -78,6 +106,9 @@ private val states = mapOf("draft" to "Подготовка", "active" to "В р
                     for ((index,item) in vm.items.withIndex()) key(item.text("id")) {
                         Card(Modifier.fillMaxWidth().testTag("cabinet-item-$index")) { Column(Modifier.padding(16.dp), verticalArrangement=Arrangement.spacedBy(8.dp)) {
                             CabinetDocument(item)
+                            if(vm.route.section=="demos") safePortfolioUrl(item.text("demo_url"))?.let { url ->
+                                SecondaryAction("Открыть демо","open-demo-$index") {uriHandler.openUri(url)}
+                            }
                             when(vm.route.section) {
                                 "assign-lead", "assign-project" -> SecondaryAction("Выбрать клиента","assign-$index") {selectedClient=item}
                                 "projects", "leads", "clients" -> SecondaryAction("Открыть", "open-$index") { vm.open(CabinetRoute(when(vm.route.section){"projects"->"project";"clients"->"client";else->"lead"},item.text("id"))) }
