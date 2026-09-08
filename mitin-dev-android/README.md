@@ -95,3 +95,11 @@ Auth-клиент не сохраняет простаивающие TLS-сое�
 ## Public v1 candidate update
 
 The earlier AI-placeholder/auth-only sections above describe the baseline. This feature branch implements the native AI/confirm flow and unsigned productionRelease: see [current architecture](../docs/PUBLIC_V1_AI_BRIEF.md). No release signing, production enabling or deployment is performed.
+
+## Production AI validation edition
+
+`productionDebug` uses https://24promtbot.ru/ with platform system trust, no custom CA and no localhost fallback. It is debug-signed for review, not a store release. The startup screen reads `/api/v1/meta` before creating the brief UI. Production auth is unavailable. This validation edition additionally rejects `prepare` and `confirm` in its transport, even if server flags change; a separately reviewed release is required to enable submission.
+
+The visual system now includes an ambient launch screen, graphite cards, consistent typography, native chat bubbles, adaptive service choices and explicit unavailable states. Demo/internal variants remain supported.
+
+Production AI validation runs only on the explicit PR label `validate-production-ai`; ordinary pushes run offline build/unit/lint/regression. The bounded production test creates three technical brief sessions and runs two messages plus final generation each, with no contacts or Lead endpoint calls. Matrix tests reuse the final session through GET. Rate limits/expiry/errors use injected failures without production load. No backend deployment, environment changes or direct database writes are performed.

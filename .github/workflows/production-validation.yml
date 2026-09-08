@@ -1,0 +1,103 @@
+name: Production AI validation without submission
+on:
+  pull_request:
+    types: [labeled]
+permissions:
+  contents: read
+jobs:
+  production:
+    if: github.event.label.name == 'validate-production-ai'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    defaults:
+      run:
+        shell: bash
+        working-directory: mitin-dev-android
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+      - uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: gradle
+          cache-dependency-path: mitin-dev-android/**/*.gradle.kts
+      - name: Build production APK with system TLS only
+        run: |
+          mkdir -p evidence
+          git rev-parse HEAD > evidence/android-sha.txt
+          echo "ANDROID_AVD_HOME=$RUNNER_TEMP/production-avd" >> "$GITHUB_ENV"
+          echo "ANDROID_USER_HOME=$RUNNER_TEMP/production-android-user" >> "$GITHUB_ENV"
+          mkdir -p "$RUNNER_TEMP/production-avd" "$RUNNER_TEMP/production-android-user"
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" 'platform-tools'
+          echo "$ANDROID_HOME/platform-tools" >> "$GITHUB_PATH"
+          ./gradlew --no-daemon --console=plain assembleProductionDebug assembleProductionDebugAndroidTest testProductionDebugUnitTest lintProductionDebug 2>&1 | tee evidence/build.txt
+          cp app/build/outputs/apk/production/debug/app-production-debug.apk evidence/MITIN-DEV-Public-v1.apk
+          sha256sum evidence/MITIN-DEV-Public-v1.apk > evidence/APK-SHA256.txt
+          "$ANDROID_HOME/cmdline-tools/latest/bin/apkanalyzer" manifest print evidence/MITIN-DEV-Public-v1.apk > evidence/manifest.xml
+          "$ANDROID_HOME/build-tools/36.0.0/apksigner" verify --verbose evidence/MITIN-DEV-Public-v1.apk > evidence/signature.txt
+          python3 scripts/scan_production_apk.py
+      - name: Prepare disposable Android emulator
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends libpulse0
+          sudo chmod 666 /dev/kvm
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" 'system-images;android-35;google_apis;x86_64' 'emulator' > evidence/sdk-install.txt
+          echo no | "$ANDROID_HOME/cmdline-tools/latest/bin/avdmanager" create avd --force --name mitin-demo --package 'system-images;android-35;google_apis;x86_64' --device pixel_6 --path "$ANDROID_AVD_HOME/mitin-demo.avd"
+          "$ANDROID_HOME/emulator/emulator" -version > evidence/emulator-version.txt
+          "$ANDROID_HOME/emulator/emulator" -list-avds | tee evidence/avd-list.txt
+          grep -Fx 'mitin-demo' evidence/avd-list.txt
+          adb start-server
+          nohup "$ANDROID_HOME/emulator/emulator" -avd mitin-demo -no-window -no-audio -no-boot-anim -no-snapshot -gpu swiftshader_indirect -camera-back none -camera-front none > evidence/emulator.log 2>&1 &
+          demo_emulator_pid=$!
+          demo_boot_complete=false
+          for ((attempt=0; attempt<150; attempt++)); do
+            if ! kill -0 "$demo_emulator_pid" 2>/dev/null; then
+              tail -80 evidence/emulator.log
+              exit 1
+            fi
+            if [ "$(adb shell getprop sys.boot_completed 2>/dev/null | tr -d '\r')" = 1 ]; then
+              demo_boot_complete=true
+              break
+            fi
+            sleep 2
+          done
+          test "$demo_boot_complete" = true
+          adb shell input keyevent 82
+          adb shell settings put global window_animation_scale 0
+          adb shell settings put global transition_animation_scale 0
+          adb shell settings put global animator_duration_scale 0
+          adb shell settings put secure show_ime_with_hard_keyboard 1
+          test "$(adb shell settings get secure show_ime_with_hard_keyboard | tr -d '\r')" = 1
+          adb shell settings get secure default_input_method > evidence/input-method.txt
+          adb shell ime list -s >> evidence/input-method.txt
+          adb shell svc wifi disable
+          adb shell svc data disable
+          adb shell cmd connectivity airplane-mode enable
+          adb shell cmd connectivity airplane-mode | tee evidence/airplane-mode.txt
+          grep -Fx 'enabled' evidence/airplane-mode.txt
+          adb shell cmd wifi status > evidence/wifi-state.txt
+          adb shell dumpsys connectivity > evidence/connectivity.txt
+          adb shell getprop ro.build.version.release > evidence/android-version.txt
+          adb shell getprop ro.build.version.sdk >> evidence/android-version.txt
+      - name: Bounded real AI scenarios and read-only UI matrix
+        run: |
+          adb install --no-streaming evidence/MITIN-DEV-Public-v1.apk
+          adb install --no-streaming app/build/outputs/apk/androidTest/production/debug/app-production-debug-androidTest.apk
+          python3 scripts/validate_production.py
+      - name: Preserve redacted evidence
+        if: always()
+        run: |
+          adb shell cmd connectivity airplane-mode disable || true
+          adb pull /sdcard/Download/mitin-production evidence/screenshots || true
+          adb logcat -d -s AndroidRuntime > evidence/android-runtime.txt || true
+          adb emu kill || true
+      - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
+        if: always()
+        with:
+          name: production-validation-${{ github.event.pull_request.head.sha }}
+          path: mitin-dev-android/evidence/
+          retention-days: 14
+          if-no-files-found: error

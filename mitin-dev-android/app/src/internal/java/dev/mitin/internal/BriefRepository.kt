@@ -47,6 +47,9 @@ class HttpBriefRepository(baseUrl: String, private val client: OkHttpClient = Ht
     override suspend fun execute(record: BriefRecord) = request(record, record.pendingPath ?: "sessions", record.pendingBody ?: record.start)
     private suspend fun request(record: BriefRecord, path: String, body: JsonObject?): BriefState {
         require(Regex("sessions(?:/[a-f0-9-]{36}(?:/(messages|final|prepare|confirm))?)?").matches(path))
+        // This production validation build can never submit contacts or create leads.
+        if (dev.mitin.demo.BuildConfig.FLAVOR == "production" && path.substringAfterLast('/') in setOf("prepare", "confirm"))
+            throw BriefFailure(403, "submission_disabled")
         val url = base.newBuilder().encodedPath("/api/public/mobile-brief/$path").build()
         val request = Request.Builder().url(url).header("Accept", "application/json")
             .header("Authorization", "Bearer ${record.secret}")

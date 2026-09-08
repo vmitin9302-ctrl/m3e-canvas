@@ -15,6 +15,8 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.compose.ui.text.TextStyle
 
 private val PurpleDark = darkColorScheme(
     primary = Color(0xFFC3AEFF), onPrimary = Color(0xFF17102D),
@@ -32,7 +34,14 @@ private val PurpleDark = darkColorScheme(
 
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable fun MitinTheme(content: @Composable () -> Unit) {
-    MaterialExpressiveTheme(colorScheme = PurpleDark, content = content)
+    MaterialExpressiveTheme(colorScheme = PurpleDark, typography = Typography(
+        headlineLarge = TextStyle(fontSize = 32.sp, lineHeight = 38.sp, fontWeight = FontWeight.Bold, letterSpacing = (-.7).sp),
+        headlineMedium = TextStyle(fontSize = 27.sp, lineHeight = 34.sp, fontWeight = FontWeight.SemiBold),
+        titleLarge = TextStyle(fontSize = 22.sp, lineHeight = 29.sp, fontWeight = FontWeight.SemiBold),
+        bodyLarge = TextStyle(fontSize = 16.sp, lineHeight = 25.sp),
+        bodyMedium = TextStyle(fontSize = 15.sp, lineHeight = 23.sp),
+        bodySmall = TextStyle(fontSize = 13.sp, lineHeight = 20.sp)
+    ), content = content)
 }
 
 @Composable fun Eyebrow(text: String) {
