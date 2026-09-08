@@ -24,6 +24,9 @@ keyboard, Back and Activity recreation at 320/360/412 dp and 100/160% fonts, plu
 client A/B isolation. Its synthetic TOTP helper is test-harness-only and waits for
 an unused actual time step instead of disabling replay protection.
 
-Validation pending on the exact committed Android/backend pair. No merge,
+Input assertions use Compose `InputText`, not the visually masked `EditableText`,
+and never export the compared password/code. See the [semantics reference](https://developer.android.com/reference/kotlin/androidx/compose/ui/semantics/SemanticsProperties).
+
+Review readiness is determined by CI on the exact Android/backend pair. No merge,
 deployment, production accounts or production configuration changes are part of
 this draft.

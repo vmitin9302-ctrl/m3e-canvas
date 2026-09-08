@@ -47,7 +47,9 @@ fun ComposeTestRule.replaceWhenReady(tag: String, value: String, activity: () ->
     settleWindow(activity)
     node.performTextReplacement(value)
     settleWindow(activity)
-    // Do not dump editable contents into failures or retry a dropped edit.
-    assertTrue("Editable value was not retained after IME initialization",
-        node.fetchSemanticsNode().config[SemanticsProperties.EditableText].text == value)
+    // EditableText is the visually transformed value (bullets for passwords).
+    // InputText is the actual input in Compose 1.9+. Compare in memory only;
+    // never let an assertion dump the code/password or retry a dropped edit.
+    assertTrue("Input value was not retained after IME initialization (field: $tag)",
+        node.fetchSemanticsNode().config[SemanticsProperties.InputText].text == value)
 }
