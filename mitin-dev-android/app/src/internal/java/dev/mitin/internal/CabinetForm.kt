@@ -23,9 +23,9 @@ private data class Field(val key:String,val label:String,val required:Boolean=fa
         "support"->listOf(Field("subject","Тема обращения",true),Field("description","Что произошло или что нужно изменить",true))
         else->emptyList()
     }
-    val values = remember(kind,vm.route) { mutableStateMapOf<String,String>().also { values -> for(f in fields) {
-        val raw=vm.editRecord?.text(f.key) ?: if(kind in setOf("profile","project")) vm.document.text(f.key) else ""
-        values[f.key]=if(f.money && raw.isNotBlank()) raw.toLongOrNull()?.let{java.math.BigDecimal.valueOf(it,2).toPlainString()} ?: "" else if(f.key.endsWith("_at") || f.key == "support_until") raw.take(10) else raw
+    val values = remember(kind,vm.route) { vm.formValues.also { values -> for(f in fields) {
+        val raw=vm.editRecord?.text(f.key) ?: if(kind in setOf("profile","project","owner-lead")) vm.document.text(f.key) else ""
+        if(!values.containsKey(f.key)) values[f.key]=if(f.money && raw.isNotBlank()) raw.toLongOrNull()?.let{java.math.BigDecimal.valueOf(it,2).toPlainString()} ?: "" else if(f.key.endsWith("_at") || f.key == "support_until") raw.take(10) else raw
     } } }
     val choices=when(kind) {
         "profile"->mapOf("legal_status" to listOf("unknown" to "Не указан","individual" to "Физическое лицо","self_employed" to "Самозанятый","individual_entrepreneur" to "ИП","individual_entrepreneur_npd" to "ИП на НПД","llc" to "ООО","other" to "Другое"))
@@ -38,19 +38,10 @@ private data class Field(val key:String,val label:String,val required:Boolean=fa
         "support"->mapOf("type" to listOf("question" to "Вопрос","bug" to "Ошибка","change" to "Изменение","feature" to "Новая функция"))
         else->emptyMap()
     }
-    val selected=remember(kind,vm.route) { mutableStateMapOf<String,String>().also { for((key,options) in choices) it[key]=(vm.editRecord ?: vm.document).text(key).takeIf { value->options.any{p->p.first==value} } ?: options.first().first } }
-    var submitted by remember {mutableStateOf(false)}
-    var observedBusy by remember {mutableStateOf(false)}
-    LaunchedEffect(vm.busy,vm.status,submitted) {
-        if(submitted && vm.busy) observedBusy=true
-        if(submitted && observedBusy && !vm.busy) {
-            if(vm.status in setOf(CabinetStatus.Success,CabinetStatus.Empty)) close()
-            submitted=false;observedBusy=false
-        }
-    }
+    val selected=remember(kind,vm.route) { vm.formChoices.also { for((key,options) in choices) if(!it.containsKey(key)) it[key]=(vm.editRecord ?: vm.document).text(key).takeIf { value->options.any{p->p.first==value} } ?: options.first().first } }
     var error by remember {mutableStateOf<String?>(null)}
-    var clientAction by remember {mutableStateOf(false)}
-    var archived by remember {mutableStateOf(vm.document["archived_at"] is JsonPrimitive)}
+    var clientAction by vm::formClientAction
+    var archived by vm::formArchived
     for(f in fields) Input(f.label+(if(f.required) " *" else ""),values[f.key] ?: "","field-${f.key}"){values[f.key]=it}
     for((key,options) in choices) {
         Text(when(key){"status"->"Статус";"type"->"Тип";"legal_status"->"Правовой статус — выберите самостоятельно";"category"->"Категория";"recurrence"->"Периодичность";else->"Бюджет"})
@@ -76,7 +67,6 @@ private data class Field(val key:String,val label:String,val required:Boolean=fa
                 if(kind=="stages") {put("position",vm.items.size);put("client_action_required",clientAction)}
                 if(kind=="project")put("archived",archived)
             }
-            submitted=true
             when(kind){"profile"->vm.saveProfile(data);"lead"->vm.createLead(data);"owner-lead"->vm.patchLead(data);"project"->vm.saveProject(data);else->vm.editRecord?.let{vm.changeChild(kind,it.text("id"),data)} ?: vm.createChild(kind,data)}
         } catch(_:Exception) {error="Заполните обязательные поля. Сумму укажите в рублях, дату — ГГГГ-ММ-ДД."}
     }

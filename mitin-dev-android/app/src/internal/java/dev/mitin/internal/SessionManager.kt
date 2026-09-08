@@ -168,7 +168,10 @@ class SessionManager(
     suspend fun <T> authorizedRead(operation: suspend (Secret) -> T): T = get { operation(it.access) }.second
     suspend fun <T> authorizedMutation(operation: suspend (Secret) -> T): T {
         val lease = access()
-        val result = operation(lease.access)
+        val result = try { operation(lease.access) } catch(failure:AuthFailure) {
+            if(failure.status==401) mutex.withLock {if(epoch==lease.epoch) clearLocked("Сессия завершена. Войдите заново.")}
+            throw failure
+        }
         mutex.withLock { if (epoch != lease.epoch) throw Superseded() }
         return result
     }

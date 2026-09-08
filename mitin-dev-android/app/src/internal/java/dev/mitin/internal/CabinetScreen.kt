@@ -7,6 +7,9 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.outlined.Send
+import androidx.compose.ui.Alignment
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalDensity
@@ -25,7 +28,7 @@ private val states = mapOf("draft" to "Подготовка", "active" to "В р
 
 @Composable fun CabinetScreen(authVm: InternalViewModel, vm: CabinetViewModel = viewModel()) {
     val auth = authVm.manager!!.state.collectAsStateWithLifecycle().value
-    var form by remember(auth.profile?.userId, vm.route) { mutableStateOf<String?>(null) }
+    var form by vm::form
     var material by remember(auth.profile?.userId, vm.route) { mutableStateOf<String?>(null) }
     var downloadId by remember(auth.profile?.userId, vm.route) { mutableStateOf<String?>(null) }
     var selectedClient by remember(auth.profile?.userId, vm.route) {mutableStateOf<JsonObject?>(null)}
@@ -44,7 +47,7 @@ private val states = mapOf("draft" to "Подготовка", "active" to "В р
             } else {
                 Text(sections[vm.route.section] ?: "Кабинет", style = MaterialTheme.typography.titleLarge)
                 if (vm.route != CabinetRoute()) SecondaryAction("Назад", "cabinet-back") { vm.back() }
-                if (vm.busy) LinearProgressIndicator(Modifier.fillMaxWidth())
+                if (vm.busy) LinearProgressIndicator(Modifier.fillMaxWidth().testTag("cabinet-loading"))
                 if (form != null) CabinetForm(form!!, vm) { form = null }
                 else {
                     if (vm.route.section == "dashboard") {
@@ -119,27 +122,39 @@ private val states = mapOf("draft" to "Подготовка", "active" to "В р
             }
         }
         if(auth.profile != null && vm.route.section == "messages") {
-            var body by remember(auth.profile.userId, vm.route.project) { mutableStateOf("") }
-            Column(Modifier.fillMaxWidth().padding(12.dp)) {
-                Input("Сообщение по проекту",body,"project-message"){body=it}
-                PrimaryAction("Отправить","send-project-message",!vm.busy && body.isNotBlank()){vm.sendMessage(body)}
+            var body by vm::messageDraft
+            Row(Modifier.fillMaxWidth().padding(horizontal=12.dp,vertical=8.dp),verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(8.dp)) {
+                OutlinedTextField(body,{if(it.length<=10000)body=it},label={Text("Сообщение")},maxLines=if(ime)2 else 3,modifier=Modifier.weight(1f).testTag("project-message"))
+                FilledIconButton(onClick={vm.sendMessage(body)},enabled=!vm.busy && body.isNotBlank(),modifier=Modifier.size(56.dp).testTag("send-project-message")) {
+                    Icon(Icons.AutoMirrored.Outlined.Send,contentDescription="Отправить сообщение")
+                }
             }
         }
     }
 }
 
 @Composable private fun CabinetDocument(value: JsonObject) {
-    for((key,label) in labels) if(value.containsKey(key)) {
+    val extra=mapOf("due_at" to "Срок","planned_start_at" to "Плановое начало","planned_finish_at" to "Плановое завершение","actual_finish_at" to "Завершён","support_until" to "Поддержка до","last_activity_at" to "Последняя активность","legal_status" to "Правовой статус","registration_status" to "Регистрация","confirmed_project_value" to "Стоимость согласованных проектов","recurrence" to "Периодичность","category" to "Категория","provider" to "Поставщик","note" to "Примечание","type" to "Тип")
+    val names=mapOf("reviewing" to "Рассматриваем","need_info" to "Нужна информация","qualified" to "Квалифицирована","converted" to "Проект создан","archived" to "Архив","unknown" to "Не указан","individual" to "Физическое лицо","self_employed" to "Самозанятый","individual_entrepreneur" to "ИП","individual_entrepreneur_npd" to "ИП на НПД","llc" to "ООО","other" to "Другое","pending" to "Ожидает подтверждения","unregistered" to "Без аккаунта","once" to "Разово","monthly" to "Ежемесячно","yearly" to "Ежегодно","one_time_external" to "Разовый сторонний расход","infrastructure" to "Инфраструктура","api_service" to "API и сервисы","prepayment" to "Предоплата","payment" to "Оплата","final_payment" to "Финальный платёж","refund" to "Возврат","correction" to "Дополнительное поступление","bug" to "Ошибка","change" to "Изменение","feature" to "Новая функция","question" to "Вопрос")
+    for((key,label) in labels+extra) if(value.containsKey(key)) {
         val raw=value.text(key)
-        val money=key.endsWith("amount") || key.endsWith("_minor") || key in setOf("confirmed_payments","outstanding_balance")
-        val display=if(value[key] is JsonNull) "Не согласовано" else if(money) value.number(key)?.let { java.math.BigDecimal.valueOf(it,2).toPlainString()+" ₽" } ?: raw else states[raw] ?: raw
+        val money=key.endsWith("amount") || key.endsWith("_minor") || key in setOf("confirmed_payments","outstanding_balance","confirmed_project_value")
+        val display=when {
+            value[key] is JsonNull -> if(money) "Не согласовано" else "Не указано"
+            money -> value.number(key)?.let { java.math.BigDecimal.valueOf(it,2).toPlainString()+" ₽" } ?: raw
+            key.endsWith("_at") || key=="support_until" -> runCatching{java.time.Instant.parse(raw).atZone(java.time.ZoneId.systemDefault()).format(java.time.format.DateTimeFormatter.ofPattern("dd.MM.yyyy"))}.getOrDefault(raw)
+            key=="registration_status" && raw=="active" -> "Подтверждена"
+            else -> names[raw] ?: states[raw] ?: raw
+        }
         if(display.isNotBlank()) Text("$label: $display", style=MaterialTheme.typography.bodyLarge)
     }
     (value["decision"] as? JsonObject)?.let { Text("Решение: ${states[it.text("decision")] ?: it.text("decision")}");Text(it.text("comment")) }
+    (value["lead_to_project_conversion"] as? JsonObject)?.let { Text("Заявок стали проектами: ${it.text("numerator")} из ${it.text("denominator")}") }
+    (value["project_sources"] as? JsonArray)?.forEach { element -> val source=element.jsonObject;Text("${mapOf("app" to "Приложение","site" to "Сайт","telegram" to "Telegram","max" to "MAX","vk" to "VK")[source.text("source")] ?: "Другой источник"}: ${source.text("count")}") }
 }
 
-@Composable internal fun Input(label:String, value:String, tag:String, secret:Boolean=false, changed:(String)->Unit) {
-    OutlinedTextField(value, changed, label={Text(label)}, modifier=Modifier.fillMaxWidth().testTag(tag), visualTransformation=if(secret) PasswordVisualTransformation() else VisualTransformation.None, singleLine=secret, maxLines=if(secret) 1 else 5)
+@Composable internal fun Input(label:String, value:String, tag:String, secret:Boolean=false, maxLines:Int=5, changed:(String)->Unit) {
+    OutlinedTextField(value, changed, label={Text(label)}, modifier=Modifier.fillMaxWidth().testTag(tag), visualTransformation=if(secret) PasswordVisualTransformation() else VisualTransformation.None, singleLine=secret || maxLines==1, maxLines=if(secret) 1 else maxLines)
 }
 
 @Composable private fun CabinetAuth(auth:InternalViewModel, vm:CabinetViewModel) {

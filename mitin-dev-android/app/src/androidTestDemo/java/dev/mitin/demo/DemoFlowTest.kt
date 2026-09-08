@@ -36,13 +36,14 @@ class DemoFlowTest {
         screen("c-welcome")
     }
     private fun tap(tag: String) {
+        ui.waitUntil(30_000) {ui.onAllNodes(hasTestTag(tag) and isEnabled()).fetchSemanticsNodes().isNotEmpty()}
         val node = ui.onNodeWithTag(tag)
         if (ui.onAllNodes(hasTestTag(tag) and hasAnyAncestor(hasScrollAction())).fetchSemanticsNodes().isNotEmpty()) {
             node.performScrollTo()
         }
-        node.performClick(); ui.waitForIdle()
+        node.assertIsDisplayed().performClick(); ui.waitForIdle()
     }
-    private fun top(tag: String) { ui.onNodeWithTag(tag).performClick(); ui.waitForIdle() }
+    private fun top(tag: String) = tap(tag)
     private fun screen(name: String) { ui.waitUntil(10_000) { ui.onAllNodesWithTag("screen-$name").fetchSemanticsNodes().isNotEmpty() } }
     private fun shot(name: String) {
         ui.waitForIdle(); device.waitForIdle()

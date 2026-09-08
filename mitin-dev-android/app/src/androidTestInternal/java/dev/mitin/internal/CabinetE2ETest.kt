@@ -93,6 +93,7 @@ class CabinetUiE2ETest {
     private val device get()=UiDevice.getInstance(instrumentation)
     private fun waitFor(tag:String)=ui.waitUntil(60_000){ui.onAllNodesWithTag(tag).fetchSemanticsNodes().isNotEmpty()}
     private fun tap(tag:String) {
+        ui.waitUntil(60_000){ui.onAllNodesWithTag("cabinet-loading").fetchSemanticsNodes().isEmpty()}
         waitFor(tag);ui.waitUntil(60_000){ui.onAllNodes(hasTestTag(tag) and isEnabled()).fetchSemanticsNodes().isNotEmpty()}
         val node=ui.onNodeWithTag(tag)
         if(ui.onAllNodes(hasTestTag(tag) and hasAnyAncestor(hasScrollAction())).fetchSemanticsNodes().isNotEmpty())node.performScrollTo()
@@ -119,7 +120,9 @@ class CabinetUiE2ETest {
         waitFor("cabinet-token")
         fill("cabinet-token",runBlocking(Dispatchers.IO){mailCode(email)});hideKeyboard();tap("cabinet-auth-submit")
         waitFor("cabinet-email");login(email);shot("client-dashboard")
-        tap("cabinet-profile");tap("cabinet-add");fill("field-city","Москва");hideKeyboard();tap("cabinet-save")
+        tap("cabinet-profile");tap("cabinet-add");fill("field-city","Москва");hideKeyboard()
+        ui.activityRule.scenario.recreate();ui.waitForIdle();waitFor("field-city");ui.onNodeWithTag("field-city").assertTextContains("Москва")
+        tap("cabinet-save")
         ui.waitUntil(60_000){ui.onAllNodesWithTag("cabinet-save").fetchSemanticsNodes().isEmpty()}
         tap("cabinet-back");tap("cabinet-leads");tap("cabinet-add");fill("field-title","Проект из Android");fill("field-service","Сайт");fill("field-description","Длинное описание задачи клиента. ".repeat(15));hideKeyboard();tap("cabinet-save")
         ui.waitUntil(60_000){ui.onAllNodesWithTag("cabinet-save").fetchSemanticsNodes().isEmpty()}

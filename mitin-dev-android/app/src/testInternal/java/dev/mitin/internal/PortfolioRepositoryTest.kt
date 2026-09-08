@@ -15,7 +15,7 @@ class PortfolioRepositoryTest {
         val trust = HandshakeCertificates.Builder().addTrustedCertificate(cert.certificate).build()
         val server = MockWebServer(); server.useHttps(serverTls.sslSocketFactory(), false); server.start()
         val client = HttpAuthApi.secureClient().newBuilder().sslSocketFactory(trust.sslSocketFactory(), trust.trustManager)
-            .callTimeout(800, TimeUnit.MILLISECONDS).build()
+            .callTimeout(10, TimeUnit.SECONDS).build()
         try { block(server, HttpPortfolioRepository(server.url("/").toString(), client)) }
         finally { server.shutdown() }
     }

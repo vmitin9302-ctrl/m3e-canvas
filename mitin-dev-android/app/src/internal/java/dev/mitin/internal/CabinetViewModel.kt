@@ -31,6 +31,21 @@ class CabinetViewModel(app: Application) : AndroidViewModel(app) {
     private var pendingMessage: Pair<String,String>? = null
     var editRecord by mutableStateOf<JsonObject?>(null); private set
     fun edit(value:JsonObject?) { editRecord=value }
+    private val formState=mutableStateOf<String?>(null)
+    val formValues=mutableStateMapOf<String,String>()
+    val formChoices=mutableStateMapOf<String,String>()
+    var formClientAction by mutableStateOf(false)
+    var formArchived by mutableStateOf(false)
+    var messageDraft by mutableStateOf("")
+    var form:String?
+        get()=formState.value
+        set(value) {
+            if(value!=formState.value) {
+                formValues.clear();formChoices.clear();formClientAction=false
+                formArchived=document["archived_at"] is JsonPrimitive
+            }
+            formState.value=value
+        }
 
     init {
         viewModelScope.launch {
@@ -38,7 +53,7 @@ class CabinetViewModel(app: Application) : AndroidViewModel(app) {
                 if (userId != auth.profile?.userId) {
                     job?.cancel(); userId = auth.profile?.userId; owner = auth.profile?.role == "owner"
                     document = JsonObject(emptyMap()); items = emptyList(); history.clear(); route = CabinetRoute()
-                    nextOffset = null; notice = null; pendingMessage = null; editRecord=null; busy = false
+                    nextOffset = null; notice = null; pendingMessage = null; editRecord=null;form=null;messageDraft=""; busy = false
                     if (auth.profile != null) refresh() else status = CabinetStatus.Unauthorized
                 }
             }
@@ -89,11 +104,14 @@ class CabinetViewModel(app: Application) : AndroidViewModel(app) {
     }
     fun open(target: CabinetRoute) {
         if (busy) return
+        form=null
+        if(route.project!=target.project)messageDraft=""
         history.add(route); route = target; items = emptyList(); document = JsonObject(emptyMap()); nextOffset = null
         refresh()
     }
     fun back(): Boolean {
         if (history.isEmpty()) return false
+        form=null
         job?.cancel(); busy = false; route = history.removeAt(history.lastIndex); items = emptyList(); document = JsonObject(emptyMap()); refresh(); return true
     }
     fun refresh(more: Boolean = false) = run { load(more) }
@@ -102,12 +120,12 @@ class CabinetViewModel(app: Application) : AndroidViewModel(app) {
         notice = if(action == "verify-email") "Email подтверждён. Можно войти." else "Если данные подходят, письмо отправлено."
         done()
     }
-    fun saveProfile(data: JsonObject) = run { repository.mutate("profile", "PATCH", data); load() }
+    fun saveProfile(data: JsonObject) = run { repository.mutate("profile", "PATCH", data); load();form=null }
     fun createLead(data: JsonObject) = run {
         val result = repository.mutate("leads", "POST", data)
-        history.add(route); route = CabinetRoute("lead", result.text("id")); load()
+        form=null;history.add(route); route = CabinetRoute("lead", result.text("id")); load()
     }
-    fun patchLead(data: JsonObject) = run { repository.mutate("owner/leads/${route.id}", "PATCH", data); load() }
+    fun patchLead(data: JsonObject) = run { repository.mutate("owner/leads/${route.id}", "PATCH", data); load();form=null }
     fun assign(profileId:String) = run {
         val target=history.last()
         val data=buildJsonObject {
@@ -123,13 +141,13 @@ class CabinetViewModel(app: Application) : AndroidViewModel(app) {
     }
     fun saveProject(data: JsonObject) = run {
         repository.mutate("owner/projects/${route.id}", "PATCH", JsonObject(data + ("version" to (document["version"] ?: JsonPrimitive(1)))))
-        load()
+        load();form=null
     }
     fun createChild(section: String, data: JsonObject) = run {
-        repository.mutate(prefix()+"projects/${route.project}/$section", "POST", data); load()
+        repository.mutate(prefix()+"projects/${route.project}/$section", "POST", data); load();form=null
     }
     fun changeChild(section: String, id: String, data: JsonObject) = run {
-        repository.mutate("owner/projects/${route.project}/$section/$id", "PATCH", data); load()
+        repository.mutate("owner/projects/${route.project}/$section/$id", "PATCH", data); load();form=null
     }
     fun decide(id: String, decision: String, comment: String) = run {
         repository.mutate("projects/${route.project}/demos/$id/decision", "POST", buildJsonObject { put("decision", decision); put("comment", comment) }); load()
@@ -137,7 +155,7 @@ class CabinetViewModel(app: Application) : AndroidViewModel(app) {
     fun sendMessage(body: String) = run {
         val request = pendingMessage?.takeIf { it.first == body } ?: (body to UUID.randomUUID().toString()).also { pendingMessage = it }
         repository.mutate(prefix()+"projects/${route.project}/messages", "POST", buildJsonObject { put("body", body); put("client_request_id", request.second) })
-        pendingMessage = null; load()
+        pendingMessage = null;if(messageDraft==body)messageDraft=""; load()
     }
     fun reorderStages(ids: List<String>) = run {
         repository.mutate("owner/projects/${route.project}/stage-order", "PUT", buildJsonObject { put("ids", JsonArray(ids.map(::JsonPrimitive))) }); load()
