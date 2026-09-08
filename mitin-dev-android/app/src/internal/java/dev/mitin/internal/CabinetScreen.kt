@@ -6,6 +6,8 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.relocation.BringIntoViewRequester
+import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.*
 import androidx.compose.material.icons.Icons
@@ -52,7 +54,7 @@ private val states = mapOf("draft" to "Подготовка", "active" to "В р
     Column(Modifier.fillMaxSize().testTag("cabinet")) {
         Column(Modifier.weight(1f).fillMaxWidth().verticalScroll(scroll).padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Heading(if(auth.profile == null) "Личный кабинет" else if(vm.route.section=="dashboard") {if(vm.owner) "Кабинет владельца" else "Ваши проекты"} else sections[vm.route.section] ?: "Выберите клиента")
-            vm.notice?.let { InfoCard("Уведомление", it,tag="cabinet-notice") }
+            if (auth.profile != null) vm.notice?.let { InfoCard("Уведомление", it,tag="cabinet-notice") }
             auth.message?.let {InfoCard("Вход",it)}
             authVm.error?.let { InfoCard("Вход", it) }
             if (auth.profile == null) {
@@ -196,6 +198,7 @@ private val states = mapOf("draft" to "Подготовка", "active" to "В р
     OutlinedTextField(value, changed, label={Text(label)}, modifier=Modifier.fillMaxWidth().testTag(tag), visualTransformation=if(secret) PasswordVisualTransformation() else VisualTransformation.None, singleLine=secret || maxLines==1, maxLines=if(secret) 1 else maxLines)
 }
 
+@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable private fun CabinetAuth(auth:InternalViewModel, vm:CabinetViewModel) {
     val state = auth.manager!!.state.collectAsStateWithLifecycle().value
     if (state.mfaRequired) {
@@ -229,6 +232,13 @@ private val states = mapOf("draft" to "Подготовка", "active" to "В р
         TextButton(onClick={uri.openUri("https://24promtbot.ru/terms.html")}) {Text("Пользовательское соглашение")}
     }
     val valid = validAuthForm(mode,email,name,password,confirmation,token,consent,terms)
+    val noticeView = remember { BringIntoViewRequester() }
+    vm.notice?.let { notice ->
+        Box(Modifier.bringIntoViewRequester(noticeView)) { InfoCard("Уведомление",notice,tag="cabinet-notice") }
+    }
+    LaunchedEffect(vm.notice) {
+        if (vm.notice != null) { withFrameNanos { }; noticeView.bringIntoView() }
+    }
     PrimaryAction(if(vm.busy) "Выполняем…" else if(mode=="register") "Создать аккаунт" else "Продолжить","cabinet-auth-submit",!vm.busy && !auth.busy && valid) {
         if(mode == "login") { auth.login(email,Secret(password));password="" }
         else vm.authAction(mode,buildJsonObject {

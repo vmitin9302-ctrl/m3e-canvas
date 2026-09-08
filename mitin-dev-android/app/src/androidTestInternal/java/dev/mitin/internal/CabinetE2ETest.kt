@@ -167,7 +167,7 @@ class CabinetUiE2ETest {
         fill("cabinet-password-repeat",TEST_PASSWORD);hideKeyboard();tap("cabinet-consent");tap("cabinet-terms")
         try {
             runBlocking(Dispatchers.IO){fault("offline")};tap("cabinet-auth-submit");waitFor("cabinet-notice")
-            ui.onNodeWithText("Нет связи с сервисом. Проверьте подключение.").assertExists();shot("registration-offline")
+            ui.waitForIdle();ui.onNodeWithText("Нет связи с сервисом. Проверьте подключение.").assertIsDisplayed();shot("registration-offline")
         } finally { runBlocking(Dispatchers.IO){fault("none")} }
         tap("cabinet-auth-submit")
         waitFor("cabinet-token")
