@@ -14,7 +14,7 @@ interface RefreshStore {
     suspend fun beginExchange()
     suspend fun clear()
 }
-data class AuthState(val restoring: Boolean = true, val profile: Me? = null, val message: String? = null)
+data class AuthState(val restoring: Boolean = true, val profile: Me? = null, val message: String? = null, val mfaRequired: Boolean = false)
 class AccessLease(val epoch: Long, val generation: Long, val access: Secret)
 data class LogoutResult(val serverRevoked: Boolean)
 
@@ -33,6 +33,9 @@ class SessionManager(
     private var generation = 0L
     private class Credentials(val access: Secret?, val refresh: Secret, val expiresAt: Long)
     private var credentials: Credentials? = null
+    private class PendingMfa(val token: Secret, val expiresAt: Long)
+    private var pendingMfa: PendingMfa? = null
+    private var verifyingMfa = false
     private var exchange: Deferred<AccessLease>? = null
     private val mutable = MutableStateFlow(AuthState())
     val state = mutable.asStateFlow()
@@ -40,6 +43,7 @@ class SessionManager(
     private suspend fun clearLocked(message: String? = null) {
         val previous = epoch++
         credentials = null; generation++
+        pendingMfa = null; verifyingMfa = false
         api.cancel(previous)
         exchange?.cancel(); exchange = null
         // State changes immediately; a late response may never restore a private screen.
@@ -84,16 +88,57 @@ class SessionManager(
         // Screen cancellation does not retry login. The single operation continues
         // in application scope, and an account change invalidates its epoch.
         return operations.async {
+            val requestStartedAt = now()
             try {
-                val requestStartedAt = now()
                 val pair = api.login(email, password, start)
                 mutex.withLock {
                     if (epoch != start) throw Superseded()
                     persistPairLocked(pair, requestStartedAt)
                 }
                 loadMe()
+            } catch (challenge: MfaRequired) {
+                mutex.withLock {
+                    if (epoch != start) throw Superseded()
+                    val deadline = requestStartedAt + challenge.expiresIn * 1000L
+                    if (challenge.expiresIn !in 1..180 || now() >= deadline) throw AuthFailure()
+                    pendingMfa = PendingMfa(challenge.challenge, deadline)
+                    mutable.value = AuthState(restoring = false, mfaRequired = true)
+                }
+                throw challenge
             } catch (failure: Exception) {
                 mutex.withLock { if (epoch == start) clearLocked() }
+                throw failure
+            }
+        }.await()
+    }
+    suspend fun cancelMfa() = mutex.withLock { clearLocked() }
+
+    suspend fun verifyMfa(code: Secret): Me {
+        val (start, pending) = mutex.withLock {
+            val pending = pendingMfa ?: throw SignedOut()
+            if (now() >= pending.expiresAt) { clearLocked("Время подтверждения истекло. Войдите заново."); throw SignedOut() }
+            if (verifyingMfa) throw Superseded()
+            verifyingMfa = true
+            epoch to pending
+        }
+        return operations.async {
+            try {
+                val requestStartedAt = now()
+                val pair = api.verifyMfa(pending.token, code, start)
+                mutex.withLock {
+                    if (epoch != start) throw Superseded()
+                    persistPairLocked(pair, requestStartedAt)
+                    pendingMfa = null
+                    verifyingMfa = false
+                }
+                loadMe()
+            } catch (failure: Exception) {
+                mutex.withLock {
+                    if (epoch == start) {
+                        verifyingMfa = false
+                        if (failure !is AuthFailure || failure.status != 401 || pendingMfa == null) clearLocked()
+                    }
+                }
                 throw failure
             }
         }.await()

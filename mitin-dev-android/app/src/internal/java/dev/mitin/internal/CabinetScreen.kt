@@ -6,6 +6,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.Send
@@ -19,6 +20,7 @@ import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -195,7 +197,14 @@ private val states = mapOf("draft" to "Подготовка", "active" to "В р
 }
 
 @Composable private fun CabinetAuth(auth:InternalViewModel, vm:CabinetViewModel) {
+    val state = auth.manager!!.state.collectAsStateWithLifecycle().value
+    if (state.mfaRequired) {
+        OwnerMfaScreen(auth.busy, auth.error, auth::verifyMfa, auth::cancelMfa)
+        return
+    }
+    val registration = auth.getApplication<InternalApplication>().capabilities?.registration == true
     var mode by remember { mutableStateOf("login") }
+    LaunchedEffect(registration) { if (!registration) mode = "login" }
     var email by remember { mutableStateOf("") }; var password by remember {mutableStateOf("")}; var name by remember {mutableStateOf("")};var phone by remember {mutableStateOf("")};var token by remember {mutableStateOf("")};var consent by remember {mutableStateOf(false)}
     Text(when(mode){"register"->"Регистрация клиента";"verify-email"->"Подтверждение email";"password-reset/request"->"Восстановление пароля";"password-reset/confirm"->"Новый пароль";else->"Вход"})
     if(mode in setOf("login","register","password-reset/request","resend-verification")) Input("Email",email,"cabinet-email"){email=it}
@@ -213,5 +222,25 @@ private val states = mapOf("draft" to "Подготовка", "active" to "В р
             if(mode in setOf("verify-email","password-reset/confirm"))put("token",token)
         }) { password="";token="";mode=if(mode=="register") "verify-email" else "login" }
     }
-    for((action,label) in listOf("login" to "Уже есть аккаунт", "register" to "Создать аккаунт", "verify-email" to "Подтвердить email", "resend-verification" to "Отправить письмо ещё раз", "password-reset/request" to "Забыли пароль?", "password-reset/confirm" to "Есть код восстановления")) if(action != mode) SecondaryAction(label,"auth-$action"){mode=action;password="";token=""}
+    if (!registration) Text("Регистрация временно недоступна", Modifier.testTag("registration-unavailable"))
+    for((action,label) in listOf("login" to "Уже есть аккаунт", "register" to "Создать аккаунт", "verify-email" to "Подтвердить email", "resend-verification" to "Отправить письмо ещё раз", "password-reset/request" to "Забыли пароль?", "password-reset/confirm" to "Есть код восстановления")) if(action != mode && (registration || action == "login")) SecondaryAction(label,"auth-$action"){mode=action;password="";token=""}
+}
+
+@Composable internal fun OwnerMfaScreen(busy: Boolean, error: String?, verify: (Secret) -> Unit, cancel: () -> Unit) {
+    // Codes never enter SavedState. The application retains only the short-lived
+    // challenge across Activity recreation; process death requires a fresh login.
+    var code by remember { mutableStateOf("") }
+    val ime = WindowInsets.ime.getBottom(LocalDensity.current) > 0
+    BackHandler(enabled = !ime) { code = ""; cancel() }
+    Text("Подтверждение входа", style = MaterialTheme.typography.titleLarge, modifier = Modifier.testTag("owner-mfa"))
+    Text("Введите шестизначный код из приложения-аутентификатора.")
+    OutlinedTextField(value = code, onValueChange = { value -> code = value.filter { it in '0'..'9' }.take(6) },
+        label = { Text("Код подтверждения") }, singleLine = true, enabled = !busy,
+        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword),
+        visualTransformation = PasswordVisualTransformation(), modifier = Modifier.fillMaxWidth().testTag("owner-mfa-code"))
+    error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+    PrimaryAction(if (busy) "Проверяем…" else "Подтвердить вход", "owner-mfa-submit", !busy && code.length == 6) {
+        val submitted = Secret(code); code = ""; verify(submitted)
+    }
+    SecondaryAction("Вернуться ко входу", "owner-mfa-cancel") { code = ""; cancel() }
 }

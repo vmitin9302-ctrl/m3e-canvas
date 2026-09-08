@@ -14,8 +14,22 @@ import org.junit.Rule
 import org.junit.Test
 import java.io.File
 import java.util.UUID
+import dev.mitin.testing.replaceWhenReady
 
 private const val ORIGIN="https://localhost:8443/"
+private suspend fun ownerCode(): String = withContext(Dispatchers.IO) {
+    HttpAuthApi.secureClient().newBuilder().readTimeout(70, java.util.concurrent.TimeUnit.SECONDS).callTimeout(75, java.util.concurrent.TimeUnit.SECONDS).build()
+        .newCall(Request.Builder().url(ORIGIN + "test/owner-totp").post("{}".toRequestBody("application/json".toMediaType())).build()).execute().use {
+            check(it.isSuccessful)
+            Json.parseToJsonElement(it.body.string()).jsonObject.text("code")
+        }
+}
+private suspend fun loginOwner(manager: SessionManager) {
+    val challenge = runCatching { manager.login("owner@example.com", Secret(TEST_PASSWORD)) }.exceptionOrNull()
+    check(challenge is MfaRequired)
+    check(manager.state.value.profile == null && manager.state.value.mfaRequired)
+    manager.verifyMfa(Secret(ownerCode()))
+}
 private fun obj(vararg values:Pair<String,String>)=buildJsonObject {for((key,value) in values)put(key,value)}
 private fun mailCode(email:String,purpose:String="verify_email"):String = HttpAuthApi.secureClient().newCall(Request.Builder().url(ORIGIN+"test/cabinet-mail")
     .post(obj("email" to email,"purpose" to purpose).toString().toRequestBody("application/json".toMediaType())).build()).execute().use {
@@ -41,7 +55,7 @@ class CabinetNetworkE2ETest {
         val repos=managers.map{CabinetRepository(it,api)};val (client,other,admin)=repos
         try {
             register(api,email);register(api,emailB)
-            a.login(email,Secret(TEST_PASSWORD));b.login(emailB,Secret(TEST_PASSWORD));owner.login("owner@example.com",Secret(TEST_PASSWORD))
+            a.login(email,Secret(TEST_PASSWORD));b.login(emailB,Secret(TEST_PASSWORD));loginOwner(owner)
             assertEquals("owner",owner.state.value.profile!!.role)
             client.mutate("profile","PATCH",obj("name" to "Клиент Android","phone" to "+70000000000","legal_status" to "self_employed"))
             assertEquals("self_employed",client.read("profile").text("legal_status"))
@@ -107,9 +121,8 @@ class CabinetUiE2ETest {
         node.assertIsDisplayed().performClick();ui.waitForIdle()
     }
     private fun fill(tag:String,value:String) {
-        waitFor(tag);val node=ui.onNodeWithTag(tag)
-        if(ui.onAllNodes(hasTestTag(tag) and hasAnyAncestor(hasScrollAction())).fetchSemanticsNodes().isNotEmpty())node.performScrollTo()
-        node.performClick().performTextReplacement(value);ui.waitForIdle();ui.waitUntil(10_000){imeVisible()}
+        waitFor(tag)
+        ui.replaceWhenReady(tag, value) { ui.activity }
     }
     private fun hideKeyboard() {if(imeVisible()) {device.pressBack();ui.waitUntil(10_000){!imeVisible()}};ui.waitForIdle()}
     private fun shot(stage:String) {
@@ -127,7 +140,23 @@ class CabinetUiE2ETest {
         assertTrue(device.takeScreenshot(file));device.executeShellCommand("mkdir -p /sdcard/Download/mitin-network")
         device.executeShellCommand("cp ${file.absolutePath} /sdcard/Download/mitin-network/${file.name}")
     }
-    private fun login(email:String) {fill("cabinet-email",email);fill("cabinet-password",TEST_PASSWORD);hideKeyboard();tap("cabinet-auth-submit");waitFor("cabinet-projects");waitFor("cabinet-summary")}
+    private fun login(email:String) {
+        fill("cabinet-email",email);fill("cabinet-password",TEST_PASSWORD);hideKeyboard();tap("cabinet-auth-submit")
+        if (email == "owner@example.com") {
+            waitFor("owner-mfa"); assertNull(manager.state.value.profile)
+            fill("owner-mfa-code","123456")
+            ui.waitUntil(10_000){imeVisible()}; shot("owner-mfa-ime")
+            hideKeyboard(); device.pressBack(); waitFor("cabinet-email")
+            assertFalse(manager.state.value.mfaRequired)
+            fill("cabinet-email",email);fill("cabinet-password",TEST_PASSWORD);hideKeyboard();tap("cabinet-auth-submit")
+            waitFor("owner-mfa");fill("owner-mfa-code","123456");hideKeyboard()
+            ui.activityRule.scenario.recreate();ui.waitForIdle();waitFor("owner-mfa-code")
+            assertEquals("", ui.onNodeWithTag("owner-mfa-code").fetchSemanticsNode().config[androidx.compose.ui.semantics.SemanticsProperties.EditableText].text)
+            assertTrue(manager.state.value.mfaRequired); assertNull(manager.state.value.profile)
+            fill("owner-mfa-code",runBlocking { ownerCode() });hideKeyboard();tap("owner-mfa-submit")
+        }
+        waitFor("cabinet-projects");waitFor("cabinet-summary")
+    }
     @Test fun registrationProjectMessagesOwnerAndRecreation() {
         runBlocking{manager.logout()}
         waitFor("cabinet-email")
@@ -146,7 +175,7 @@ class CabinetUiE2ETest {
         val store=KeystoreRefreshStore(instrumentation.targetContext,"ui_owner_"+UUID.randomUUID().toString().replace("-",""))
         val owner=SessionManager(HttpAuthApi(ORIGIN),store,scope)
         val project=runBlocking {
-            owner.login("owner@example.com",Secret(TEST_PASSWORD))
+            loginOwner(owner)
             val client=CabinetRepository(manager,CabinetApi(ORIGIN));val admin=CabinetRepository(owner,CabinetApi(ORIGIN))
             val lead=client.read("leads",0)["items"]!!.jsonArray.first().jsonObject
             val p=admin.mutate("owner/leads/${lead.text("id")}/project","POST",obj("title" to "Проверка интерфейса"))

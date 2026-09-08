@@ -65,7 +65,9 @@ class ProductionValidationTest {
         waitFor("portfolio-ritmassage")
         val caps = (context.applicationContext as InternalApplication).capabilities!!
         assertTrue(caps.ai); assertFalse(caps.submission); assertFalse(caps.auth)
-        assertNull((context.applicationContext as InternalApplication).manager)
+        val auth = (context.applicationContext as InternalApplication).manager!!.state.value
+        assertNull(auth.profile)
+        assertFalse(auth.mfaRequired)
         ui.onNodeWithText("DIVEEV STUDIO").assertExists()
         ui.waitUntil(30_000) { ui.onAllNodesWithTag("portfolio-image").fetchSemanticsNodes().size == 2 }
         shot("catalog")

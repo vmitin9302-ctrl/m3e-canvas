@@ -45,7 +45,7 @@ class InternalApplication : Application() {
     var capabilities by mutableStateOf<Capabilities?>(if (BuildConfig.FLAVOR == "production") null else Capabilities(true, true, true))
     private val authScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     val manager: SessionManager? by lazy {
-        if (BuildConfig.API_BASE_URL.isBlank() || BuildConfig.FLAVOR == "production") null else SessionManager(
+        if (BuildConfig.API_BASE_URL.isBlank()) null else SessionManager(
             HttpAuthApi(BuildConfig.API_BASE_URL), KeystoreRefreshStore(this), authScope
         )
     }
@@ -77,6 +77,7 @@ class InternalViewModel(app: Application) : AndroidViewModel(app) {
             try { action() }
             catch (_: CancellationException) { throw CancellationException() }
             catch (_: Superseded) { }
+            catch (_: MfaRequired) { }
             catch (_: SignedOut) { error = "Войдите снова, чтобы продолжить." }
             catch (failure: AuthFailure) { error = when (failure.status) {
                 401 -> "Вход не выполнен. Проверьте данные или войдите заново."
@@ -91,6 +92,8 @@ class InternalViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
     fun login(email: String, password: Secret) = run { repository?.login(email, password) }
+    fun verifyMfa(code: Secret) = run { manager?.verifyMfa(code) }
+    fun cancelMfa() = run { manager?.cancelMfa() }
     fun profile() = run { repository?.profile() }
     fun sessions(more: Boolean = false) {
         val owner = profileId
@@ -148,7 +151,7 @@ class InternalActivity : ComponentActivity() {
         Box(Modifier.fillMaxSize().background(BrandBackground).padding(padding), contentAlignment = Alignment.TopCenter) {
             key(auth.profile?.userId, tab, showSessions) {
                 if (tab == 1) BriefScreen(brief)
-                else if (tab == 2 && configured && (vm.getApplication<InternalApplication>().capabilities?.cabinet == true)) CabinetScreen(vm)
+                else if (tab == 2 && configured && vm.getApplication<InternalApplication>().capabilities?.let { it.auth && (it.cabinet || it.owner || BuildConfig.FLAVOR == "production") } == true) CabinetScreen(vm)
                 else Column(Modifier.widthIn(max = 600.dp).fillMaxWidth().fillMaxHeight().verticalScroll(rememberScrollState()).padding(20.dp),
                     verticalArrangement = Arrangement.spacedBy(16.dp)) {
                     when {
