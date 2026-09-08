@@ -132,13 +132,19 @@ class BriefUiE2ETest {
         ui.waitUntil(10_000) { !imeVisible() }
         ui.onNodeWithTag("brief-final").performScrollTo();shot("final")
         val rotationDevice=UiDevice.getInstance(instrumentation)
+        android.util.Log.i("MitinBriefLifecycle", "rotate landscape")
         rotationDevice.setOrientationLeft()
         ui.waitUntil(30_000) { instrumentation.targetContext.resources.configuration.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE }
-        ui.waitForIdle()
+        ui.waitForIdle();waitFor("brief-to-contact")
+        android.util.Log.i("MitinBriefLifecycle", "rotate portrait")
         rotationDevice.setOrientationNatural()
         ui.waitUntil(30_000) { instrumentation.targetContext.resources.configuration.orientation == android.content.res.Configuration.ORIENTATION_PORTRAIT }
-        ui.waitForIdle()
-        ui.activityRule.scenario.recreate();ui.waitForIdle();waitFor("brief-to-contact")
+        ui.waitForIdle();waitFor("brief-to-contact")
+        // Repeated teardown covers the SlotTable disposal regression, without retries.
+        repeat(2) { cycle ->
+            android.util.Log.i("MitinBriefLifecycle", "recreate ${cycle + 1}")
+            ui.activityRule.scenario.recreate();ui.waitForIdle();waitFor("brief-to-contact")
+        }
         tap("brief-to-contact");waitFor("brief-name")
         ui.onNodeWithTag("brief-name").performScrollTo().performTextInput("Синтетический клиент")
         ui.onNodeWithTag("brief-contact").performScrollTo().performClick().performTextInput("synthetic@example.com")
