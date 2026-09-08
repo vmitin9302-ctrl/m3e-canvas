@@ -44,10 +44,11 @@ private val states = mapOf("draft" to "Подготовка", "active" to "В р
     }
     val download = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/octet-stream")) { uri -> if(uri != null && auth.profile != null) downloadId?.let{vm.saveFile(it,uri)};downloadId=null }
     val ime = WindowInsets.ime.getBottom(LocalDensity.current) > 0
+    val scroll = key(auth.profile?.userId, vm.route, form) { rememberScrollState() }
     selectedClient?.let { client -> AlertDialog(onDismissRequest={selectedClient=null},title={Text("Назначить клиента?")},text={Text(if(vm.route.section=="assign-project") "${client.text("name")} получит доступ к проекту и его истории. Предыдущий клиент потеряет доступ." else "Заявка будет связана с клиентом ${client.text("name")}. Он получит доступ к ней.")},confirmButton={TextButton(onClick={selectedClient=null;vm.assign(client.text("id"))}){Text("Назначить")}},dismissButton={TextButton(onClick={selectedClient=null}){Text("Отмена")}}) }
     BackHandler(enabled = !ime && (form != null || vm.route != CabinetRoute())) { if (form != null) form = null else vm.back() }
     Column(Modifier.fillMaxSize().testTag("cabinet")) {
-        Column(Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()).padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        Column(Modifier.weight(1f).fillMaxWidth().verticalScroll(scroll).padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Heading(if(auth.profile == null) "Личный кабинет" else if(vm.route.section=="dashboard") {if(vm.owner) "Кабинет владельца" else "Ваши проекты"} else sections[vm.route.section] ?: "Выберите клиента")
             vm.notice?.let { InfoCard("Уведомление", it,tag="cabinet-notice") }
             auth.message?.let {InfoCard("Вход",it)}

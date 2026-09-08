@@ -114,6 +114,14 @@ class CabinetUiE2ETest {
     private fun hideKeyboard() {if(imeVisible()) {device.pressBack();ui.waitUntil(10_000){!imeVisible()}};ui.waitForIdle()}
     private fun shot(stage:String) {
         ui.waitForIdle();device.waitForIdle()
+        // Semantics can be updated before the system screenshot sees the next
+        // rendered frame. Commit a frame before capturing the real screen/IME.
+        val committed=java.util.concurrent.CountDownLatch(1)
+        ui.runOnUiThread {
+            ui.activity.window.decorView.viewTreeObserver.registerFrameCommitCallback {committed.countDown()}
+            ui.activity.window.decorView.invalidate()
+        }
+        assertTrue("Screenshot frame was not rendered",committed.await(10,java.util.concurrent.TimeUnit.SECONDS))
         val label=InstrumentationRegistry.getArguments().getString("portfolioCase") ?: "cabinet"
         val file=File(instrumentation.targetContext.getExternalFilesDir(null),"cabinet-$label-$stage.png")
         assertTrue(device.takeScreenshot(file));device.executeShellCommand("mkdir -p /sdcard/Download/mitin-network")
@@ -145,7 +153,9 @@ class CabinetUiE2ETest {
             admin.mutate("owner/projects/${p.text("id")}/demos","POST",obj("title" to "Демо интерфейса"))
             owner.logout();store.clear();scope.cancel();p
         }
-        tap("cabinet-back");tap("cabinet-back");tap("cabinet-projects");tap("open-0");shot("project")
+        tap("cabinet-back");tap("cabinet-back");tap("cabinet-projects");tap("open-0");waitFor("project-messages")
+        ui.waitUntil(60_000){ui.onAllNodesWithTag("cabinet-loading").fetchSemanticsNodes().isEmpty()}
+        ui.onNodeWithText("Проект",substring=false).assertIsDisplayed();shot("project")
         tap("project-messages");fill("project-message","Сообщение с клавиатурой. ".repeat(10))
         ui.waitUntil(10_000){imeVisible()};ui.onNodeWithTag("send-project-message").assertIsDisplayed();shot("message-ime");hideKeyboard()
         ui.onNodeWithTag("project-message").assertExists();tap("send-project-message")
