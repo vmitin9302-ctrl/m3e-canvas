@@ -10,6 +10,29 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class HttpAuthApiTest {
+    @Test fun mfaChallengeIsStrictAndVerificationUsesBodyOnly() = tls { server, api -> runBlocking {
+        val raw = "c".repeat(43)
+        server.enqueue(response("""{"mfa_required":true,"challenge_token":"$raw","expires_in":180}"""))
+        val challenge = runCatching { api.login("owner@example.com", Secret("synthetic-password"), 1) }.exceptionOrNull()
+        assertTrue(challenge is MfaRequired)
+        assertFalse(challenge.toString().contains(raw))
+        server.takeRequest()
+        server.enqueue(response("""{"access_token":"${"a".repeat(200)}","refresh_token":"mdr1_${"r".repeat(43)}","token_type":"Bearer","expires_in":600}"""))
+        api.verifyMfa((challenge as MfaRequired).challenge, Secret("123456"), 1)
+        val request = server.takeRequest()
+        assertEquals("/api/v1/auth/mfa/verify", request.path)
+        assertNull(request.getHeader("Authorization")); assertNull(request.getHeader("Cookie"))
+        assertTrue(request.body.readUtf8().contains("challenge_token"))
+        for (body in listOf(
+            """{"mfa_required":true,"challenge_token":"$raw","expires_in":181}""",
+            """{"mfa_required":"true","challenge_token":"$raw","expires_in":180}""",
+            """{"mfa_required":true,"challenge_token":"$raw","expires_in":"180"}""",
+            """{"mfa_required":true,"challenge_token":"short","expires_in":180}"""
+        )) {
+            server.enqueue(response(body))
+            assertTrue(runCatching { api.login("owner", Secret("synthetic-password"), 1) }.exceptionOrNull() is AuthFailure)
+        }
+    } }
     private fun response(body: String, status: Int = 200) = MockResponse().setResponseCode(status).setHeader("Cache-Control","no-store").setBody(body)
     private val me = """{"user_id":"00000000-0000-0000-0000-000000000001","client_profile_id":"00000000-0000-0000-0000-000000000002","display_name":"Синтетический клиент","role":"client"}"""
     private fun tls(block: (MockWebServer, HttpAuthApi) -> Unit) {

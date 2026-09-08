@@ -41,9 +41,11 @@ class TokenPair(val access: Secret, val refresh: Secret, val expiresIn: Int) {
 class AuthFailure(val status: Int = 503) : Exception("Authentication operation failed ($status)")
 class SignedOut : Exception("Sign in required")
 class Superseded : Exception("Account operation superseded")
+class MfaRequired(val challenge: Secret, val expiresIn: Int) : Exception("Authenticator verification required")
 
 interface AuthApi {
     suspend fun login(email: String, password: Secret, epoch: Long): TokenPair
+    suspend fun verifyMfa(challenge: Secret, code: Secret, epoch: Long): TokenPair = throw AuthFailure()
     suspend fun refresh(token: Secret, epoch: Long): TokenPair
     suspend fun me(access: Secret, epoch: Long): Me
     suspend fun sessions(access: Secret, epoch: Long, offset: Int): SessionPage
@@ -136,8 +138,23 @@ class HttpAuthApi(baseUrl: String, private val client: OkHttpClient = secureClie
         if (access.length !in 100..8192 || !Regex("mdr1_[A-Za-z0-9_-]{43}").matches(refresh) || ttl !in 1..900) throw AuthFailure()
         TokenPair(Secret(access), Secret(refresh), ttl)
     } catch (_: Exception) { throw AuthFailure() }
-    override suspend fun login(email: String, password: Secret, epoch: Long) = pair(request("auth/login", "POST", epoch, body = buildJsonObject {
-        put("email", email); put("password", password.value)
+    override suspend fun login(email: String, password: Secret, epoch: Long): TokenPair {
+        val text = request("auth/login", "POST", epoch, body = buildJsonObject { put("email", email); put("password", password.value) })
+        val value = try { json.parseToJsonElement(text).jsonObject } catch (_: Exception) { throw AuthFailure() }
+        if ("mfa_required" in value) {
+            val challenge = try {
+                if (value.keys != setOf("mfa_required", "challenge_token", "expires_in") || value["mfa_required"] != JsonPrimitive(true)) throw AuthFailure()
+                val raw = value.getValue("challenge_token").jsonPrimitive
+                val ttl = value.getValue("expires_in").jsonPrimitive
+                if (!raw.isString || !Regex("[A-Za-z0-9_-]{43}").matches(raw.content) || ttl.isString || ttl.int !in 1..180) throw AuthFailure()
+                MfaRequired(Secret(raw.content), ttl.int)
+            } catch (_: Exception) { throw AuthFailure() }
+            throw challenge
+        }
+        return pair(text)
+    }
+    override suspend fun verifyMfa(challenge: Secret, code: Secret, epoch: Long) = pair(request("auth/mfa/verify", "POST", epoch, body = buildJsonObject {
+        put("challenge_token", challenge.value); put("code", code.value)
     }))
     override suspend fun refresh(token: Secret, epoch: Long) = pair(request("auth/refresh", "POST", epoch, body = buildJsonObject { put("refresh_token", token.value) }))
     override suspend fun me(access: Secret, epoch: Long): Me {
@@ -145,7 +162,7 @@ class HttpAuthApi(baseUrl: String, private val client: OkHttpClient = secureClie
         return try { json.decodeFromString<Me>(text).also {
             UUID.fromString(it.userId); it.clientProfileId?.let(UUID::fromString)
             if (it.role !in setOf("client", "owner") || (it.role == "client" && it.clientProfileId == null) ||
-                (it.role == "owner" && BuildConfig.FLAVOR == "production") || it.displayName.length !in 1..200) throw AuthFailure()
+                it.displayName.length !in 1..200) throw AuthFailure()
         } } catch (_: Exception) { throw AuthFailure() }
     }
     override suspend fun sessions(access: Secret, epoch: Long, offset: Int): SessionPage {
