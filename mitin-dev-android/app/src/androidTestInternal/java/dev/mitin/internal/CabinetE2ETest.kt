@@ -14,6 +14,7 @@ import org.junit.Rule
 import org.junit.Test
 import java.io.File
 import java.util.UUID
+import dev.mitin.testing.replaceWhenReady
 
 private const val ORIGIN="https://localhost:8443/"
 private suspend fun ownerCode(): String = withContext(Dispatchers.IO) {
@@ -120,9 +121,8 @@ class CabinetUiE2ETest {
         node.assertIsDisplayed().performClick();ui.waitForIdle()
     }
     private fun fill(tag:String,value:String) {
-        waitFor(tag);val node=ui.onNodeWithTag(tag)
-        if(ui.onAllNodes(hasTestTag(tag) and hasAnyAncestor(hasScrollAction())).fetchSemanticsNodes().isNotEmpty())node.performScrollTo()
-        node.performClick().performTextReplacement(value);ui.waitForIdle();ui.waitUntil(10_000){imeVisible()}
+        waitFor(tag)
+        ui.replaceWhenReady(tag, value) { ui.activity }
     }
     private fun hideKeyboard() {if(imeVisible()) {device.pressBack();ui.waitUntil(10_000){!imeVisible()}};ui.waitForIdle()}
     private fun shot(stage:String) {
