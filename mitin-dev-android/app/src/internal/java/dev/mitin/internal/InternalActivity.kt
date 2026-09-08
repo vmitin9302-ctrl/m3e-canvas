@@ -142,6 +142,7 @@ class InternalActivity : ComponentActivity() {
         Box(Modifier.fillMaxSize().background(BrandBackground).padding(padding), contentAlignment = Alignment.TopCenter) {
             key(auth.profile?.userId, tab, showSessions) {
                 if (tab == 1) BriefScreen(brief)
+                else if (tab == 2 && configured && (vm.getApplication<InternalApplication>().capabilities?.cabinet == true)) CabinetScreen(vm)
                 else Column(Modifier.widthIn(max = 600.dp).fillMaxWidth().fillMaxHeight().verticalScroll(rememberScrollState()).padding(20.dp),
                     verticalArrangement = Arrangement.spacedBy(16.dp)) {
                     when {
@@ -185,7 +186,7 @@ class InternalActivity : ComponentActivity() {
                             BrandHero("МОЙ КАБИНЕТ")
                             val profile = auth.profile!!
                             InfoCard(profile.displayName, "Клиент · профиль подтверждён ответом тестового сервера", true, "server-profile")
-                            Detail("ID профиля", profile.clientProfileId)
+                            Detail("ID профиля", profile.clientProfileId ?: "Владелец")
                             ActionRow("Мои сессии", "Устройства и управление доступом", Icons.Outlined.Devices, "open-sessions") { showSessions = true; vm.sessions() }
                             SecondaryAction("Обновить профиль", "profile-reload") { vm.profile() }
                             SecondaryAction("Выйти", "network-logout") { vm.logout() }

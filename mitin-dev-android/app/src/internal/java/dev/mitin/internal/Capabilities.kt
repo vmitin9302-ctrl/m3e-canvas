@@ -17,7 +17,10 @@ import kotlin.coroutines.resumeWithException
 @Serializable data class Capabilities(
     @SerialName("mobile_ai_brief") val ai: Boolean = false,
     @SerialName("mobile_lead_submission") val submission: Boolean = false,
-    @SerialName("client_auth") val auth: Boolean = false
+    @SerialName("client_auth") val auth: Boolean = false,
+    @SerialName("client_registration") val registration: Boolean = false,
+    @SerialName("client_cabinet") val cabinet: Boolean = false,
+    @SerialName("owner_cabinet") val owner: Boolean = false
 )
 @Serializable data class ServiceMeta(@SerialName("api_version") val version: String, val service: String, val capabilities: Capabilities)
 
@@ -51,9 +54,9 @@ class MetaRepository {
 }
 
 class MetaViewModel(app: Application) : AndroidViewModel(app) {
-    var loading by mutableStateOf(BuildConfig.FLAVOR == "production"); private set
+    var loading by mutableStateOf(BuildConfig.API_BASE_URL.isNotBlank()); private set
     var failed by mutableStateOf(false); private set
-    init { if (BuildConfig.FLAVOR == "production") reload() }
+    init { if (BuildConfig.API_BASE_URL.isNotBlank()) reload() }
     fun reload() {
         if (!loading || failed) loading = true
         failed = false

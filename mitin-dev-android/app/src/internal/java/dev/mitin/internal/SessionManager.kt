@@ -165,6 +165,13 @@ class SessionManager(
         return profile
     }
     suspend fun sessions(offset: Int = 0): SessionPage = get { api.sessions(it.access, it.epoch, offset) }.second
+    suspend fun <T> authorizedRead(operation: suspend (Secret) -> T): T = get { operation(it.access) }.second
+    suspend fun <T> authorizedMutation(operation: suspend (Secret) -> T): T {
+        val lease = access()
+        val result = operation(lease.access)
+        mutex.withLock { if (epoch != lease.epoch) throw Superseded() }
+        return result
+    }
     suspend fun revoke(id: String, current: Boolean) {
         val lease = access()
         api.revoke(lease.access, lease.epoch, id) // mutation has no automatic replay
