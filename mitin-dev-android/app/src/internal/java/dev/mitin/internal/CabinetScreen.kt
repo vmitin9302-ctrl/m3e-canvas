@@ -35,8 +35,13 @@ private val states = mapOf("draft" to "Подготовка", "active" to "В р
     var form by vm::form
     var material by remember(auth.profile?.userId, vm.route) { mutableStateOf<String?>(null) }
     var downloadId by remember(auth.profile?.userId, vm.route) { mutableStateOf<String?>(null) }
+    var uploadContext by remember(auth.profile?.userId,vm.route) {mutableStateOf<Pair<String,String>?>(null)}
     var selectedClient by remember(auth.profile?.userId, vm.route) {mutableStateOf<JsonObject?>(null)}
-    val upload = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri -> if(uri != null && auth.profile != null) vm.uploadUri(uri,material) }
+    val upload = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        val captured=uploadContext
+        if(uri != null && captured != null && captured.first==auth.profile?.userId && captured.second==vm.route.project) vm.uploadUri(uri,material)
+        uploadContext=null
+    }
     val download = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/octet-stream")) { uri -> if(uri != null && auth.profile != null) downloadId?.let{vm.saveFile(it,uri)};downloadId=null }
     val ime = WindowInsets.ime.getBottom(LocalDensity.current) > 0
     selectedClient?.let { client -> AlertDialog(onDismissRequest={selectedClient=null},title={Text("Назначить клиента?")},text={Text(if(vm.route.section=="assign-project") "${client.text("name")} получит доступ к проекту и его истории. Предыдущий клиент потеряет доступ." else "Заявка будет связана с клиентом ${client.text("name")}. Он получит доступ к ней.")},confirmButton={TextButton(onClick={selectedClient=null;vm.assign(client.text("id"))}){Text("Назначить")}},dismissButton={TextButton(onClick={selectedClient=null}){Text("Отмена")}}) }
@@ -126,7 +131,7 @@ private val states = mapOf("draft" to "Подготовка", "active" to "В р
                                     if(index > 0) SecondaryAction("Переместить выше", "stage-up-$index") { val ids=vm.items.map{it.text("id")}.toMutableList(); val id=ids.removeAt(index); ids.add(index-1,id);vm.reorderStages(ids) }
                                 }
                                 "materials" -> {
-                                    SecondaryAction("Загрузить материал","upload-material-$index") {material=item.text("id");upload.launch(arrayOf("text/plain","application/pdf","image/png","image/jpeg"))}
+                                    SecondaryAction("Загрузить материал","upload-material-$index") {material=item.text("id");uploadContext=auth.profile.userId to vm.route.project!!;upload.launch(arrayOf("text/plain","application/pdf","image/png","image/jpeg"))}
                                     if(vm.owner) for(status in listOf("accepted","needs_replacement","cancelled")) SecondaryAction(states.getValue(status),"material-$status-$index") { vm.changeChild("materials",item.text("id"),buildJsonObject {put("status",status)}) }
                                 }
                                 "files" -> if(item.text("status")=="available") SecondaryAction("Сохранить файл","download-$index") { downloadId=item.text("id");download.launch(item.text("original_name")) }
@@ -136,7 +141,7 @@ private val states = mapOf("draft" to "Подготовка", "active" to "В р
                         } }
                     }
                     if(vm.status == CabinetStatus.Empty) InfoCard("Здесь пока пусто", "Новые данные появятся после первого действия.")
-                    if(vm.route.section=="files") SecondaryAction("Загрузить файл","upload-file") {material=null;upload.launch(arrayOf("text/plain","application/pdf","image/png","image/jpeg"))}
+                    if(vm.route.section=="files") SecondaryAction("Загрузить файл","upload-file") {material=null;uploadContext=auth.profile.userId to vm.route.project!!;upload.launch(arrayOf("text/plain","application/pdf","image/png","image/jpeg"))}
                     val action = when(vm.route.section) {"profile"->"profile";"leads"->if(!vm.owner) "lead" else null;"project"->if(vm.owner) "project" else null;"stages","demos","materials","payments","expenses"->if(vm.owner) vm.route.section else null;"support"->"support";else->null}
                     if(action != null) PrimaryAction(if(action in setOf("profile","project")) "Редактировать" else "Добавить", "cabinet-add",!vm.busy) { vm.edit(null);form=action }
                     if(vm.route.section == "lead" && vm.owner) PrimaryAction("Создать проект из заявки", "convert-lead",!vm.busy) { vm.convert() }
@@ -195,6 +200,7 @@ private val states = mapOf("draft" to "Подготовка", "active" to "В р
     if(mode in setOf("login","register","password-reset/request","resend-verification")) Input("Email",email,"cabinet-email"){email=it}
     if(mode == "register") {Input("Имя",name,"cabinet-name"){name=it};Input("Телефон (необязательно)",phone,"cabinet-phone"){phone=it}}
     if(mode in setOf("login","register","password-reset/confirm")) Input("Пароль",password,"cabinet-password",true){password=it}
+    if(mode in setOf("register","password-reset/confirm")) Text("Пароль — от 15 до 128 символов.",style=MaterialTheme.typography.bodySmall)
     if(mode in setOf("verify-email","password-reset/confirm")) Input("Код из письма",token,"cabinet-token",true){token=it}
     if(mode == "register") {Row {Checkbox(consent,{consent=it},Modifier.testTag("cabinet-consent"));Text("Согласен на обработку данных для регистрации и работы над моими проектами")}}
     PrimaryAction("Продолжить","cabinet-auth-submit",!vm.busy && !auth.busy) {

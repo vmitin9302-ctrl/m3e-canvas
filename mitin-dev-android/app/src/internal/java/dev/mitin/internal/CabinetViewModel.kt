@@ -27,6 +27,7 @@ class CabinetViewModel(app: Application) : AndroidViewModel(app) {
     var owner by mutableStateOf(false); private set
     private var userId: String? = null
     private var job: Job? = null
+    private var workVersion=0L
     private val history = mutableListOf<CabinetRoute>()
     private var pendingMessage: Pair<String,String>? = null
     var editRecord by mutableStateOf<JsonObject?>(null); private set
@@ -51,7 +52,7 @@ class CabinetViewModel(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch {
             manager.state.collect { auth ->
                 if (userId != auth.profile?.userId) {
-                    job?.cancel(); userId = auth.profile?.userId; owner = auth.profile?.role == "owner"
+                    workVersion++;job?.cancel(); userId = auth.profile?.userId; owner = auth.profile?.role == "owner"
                     document = JsonObject(emptyMap()); items = emptyList(); history.clear(); route = CabinetRoute()
                     nextOffset = null; notice = null; pendingMessage = null; editRecord=null;form=null;messageDraft=""; busy = false
                     if (auth.profile != null) refresh() else status = CabinetStatus.Unauthorized
@@ -76,18 +77,21 @@ class CabinetViewModel(app: Application) : AndroidViewModel(app) {
     }
     private fun run(action: suspend () -> Unit) {
         if (busy) return
+        val version=++workVersion
         job = viewModelScope.launch {
             busy = true; notice = null; status = CabinetStatus.Loading
-            try { action(); status = if (items.isEmpty() && document.isEmpty()) CabinetStatus.Empty else CabinetStatus.Success }
+            try { action(); if(version==workVersion) status = if (items.isEmpty() && document.isEmpty()) CabinetStatus.Empty else CabinetStatus.Success }
             catch (e: CancellationException) { throw e }
             catch (_: Superseded) { }
-            catch (_: SignedOut) { status = CabinetStatus.Unauthorized; notice = "Войдите заново." }
+            catch (_: SignedOut) { if(version==workVersion) {status = CabinetStatus.Unauthorized; notice = "Войдите заново."} }
             catch (e: AuthFailure) {
+                if(version==workVersion) {
                 status = when(e.status) {401->CabinetStatus.Unauthorized;403->CabinetStatus.Forbidden;503->CabinetStatus.Offline;else->CabinetStatus.Error}
-                notice = when(e.status) {401->"Сессия завершена. Войдите заново.";403->"Действие недоступно.";404->"Данные не найдены.";409->"Данные изменились или действие уже выполнено. Обновите экран.";422->"Проверьте заполненные поля.";429->"Слишком много запросов. Попробуйте позже.";else->"Нет связи с сервисом. Проверьте подключение."}
+                notice = when(e.status) {401->"Сессия завершена. Войдите заново.";403->"Действие недоступно.";404->"Данные не найдены.";409->"Данные изменились или действие уже выполнено. Обновите экран.";413->"Файл должен быть непустым и не больше 10 МБ.";415->"Поддерживаются TXT, PDF, PNG и JPEG. Проверьте формат файла.";422->"Проверьте заполненные поля.";429->"Слишком много запросов. Попробуйте позже.";503->"Нет связи с сервисом. Проверьте подключение.";else->"Сервис не смог завершить действие. Попробуйте позже."}
+                }
             }
-            catch (_: Exception) { status = CabinetStatus.Error; notice = "Не удалось завершить действие." }
-            finally { busy = false }
+            catch (_: Exception) { if(version==workVersion) {status = CabinetStatus.Error; notice = "Не удалось завершить действие."} }
+            finally { if(version==workVersion) busy = false }
         }
     }
     private suspend fun load(more: Boolean = false) {
@@ -112,7 +116,7 @@ class CabinetViewModel(app: Application) : AndroidViewModel(app) {
     fun back(): Boolean {
         if (history.isEmpty()) return false
         form=null
-        job?.cancel(); busy = false; route = history.removeAt(history.lastIndex); items = emptyList(); document = JsonObject(emptyMap()); refresh(); return true
+        workVersion++;job?.cancel(); busy = false; route = history.removeAt(history.lastIndex); items = emptyList(); document = JsonObject(emptyMap()); refresh(); return true
     }
     fun refresh(more: Boolean = false) = run { load(more) }
     fun authAction(action: String, data: JsonObject, done: () -> Unit) = run {
@@ -175,7 +179,7 @@ class CabinetViewModel(app: Application) : AndroidViewModel(app) {
             val type = resolver.getType(uri) ?: "application/octet-stream"
             val bytes = resolver.openInputStream(uri)?.use { input ->
                 val buffer=java.io.ByteArrayOutputStream(); val chunk=ByteArray(8192)
-                while(true) { val count=input.read(chunk); if(count<0) break; require(buffer.size()+count<=10*1024*1024); buffer.write(chunk,0,count) }
+                while(true) { val count=input.read(chunk); if(count<0) break; if(buffer.size()+count>10*1024*1024)throw AuthFailure(413); buffer.write(chunk,0,count) }
                 buffer.toByteArray()
             } ?: error("unavailable")
             Triple(name,type,bytes)

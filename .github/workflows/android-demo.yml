@@ -107,6 +107,10 @@ jobs:
           test "$(adb shell settings get secure show_ime_with_hard_keyboard | tr -d '\r')" = 1
           adb shell settings get secure default_input_method > evidence/input-method.txt
           adb shell ime list -s >> evidence/input-method.txt
+          # The disposable Google image can leave its launcher ANR dialog over
+          # the tested activity during first boot. Stop that unrelated launcher;
+          # application crashes and ANRs remain visible and fail the tests.
+          adb shell am force-stop com.google.android.apps.nexuslauncher
           adb shell svc wifi disable
           adb shell svc data disable
           adb shell cmd connectivity airplane-mode enable
