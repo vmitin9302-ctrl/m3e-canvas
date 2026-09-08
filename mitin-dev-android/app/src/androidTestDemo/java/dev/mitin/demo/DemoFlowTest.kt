@@ -1,5 +1,6 @@
 package dev.mitin.demo
 
+import dev.mitin.testing.replaceWhenReady
 import android.Manifest
 import android.app.Application
 import android.content.Context
@@ -68,7 +69,7 @@ class DemoFlowTest {
         assertEquals(PackageManager.PERMISSION_DENIED, context.checkSelfPermission(Manifest.permission.INTERNET))
         shot("01-client-welcome")
         tap("create-request"); tap("type-0"); screen("c-brief"); shot("02-client-brief")
-        ui.onNodeWithTag("task").performScrollTo().performClick().performTextReplacement("Сайт для вымышленного автосервиса")
+        ui.replaceWhenReady("task", "Сайт для вымышленного автосервиса") { ui.activity }
         // Wait for the real IME before dismissing it: a late inset update can
         // otherwise move the scrolled Next button after the test locates it.
         ui.waitUntil(10_000) {
@@ -122,13 +123,20 @@ class DemoFlowTest {
     }
 
     @Test fun keyboardSystemBackRotationAndLongContent() {
+        repeat(3) { iteration ->
+            if (iteration > 0) reset()
+            longContentJourney(iteration + 1)
+        }
+    }
+
+    private fun longContentJourney(iteration: Int) {
         tap("create-request"); tap("type-5")
         val text = "Вымышленная идея: " + "подробное описание проекта с пробелами. ".repeat(12)
-        ui.onNodeWithTag("task").performScrollTo().performClick().performTextReplacement(text)
+        ui.replaceWhenReady("task", text) { ui.activity }
         ui.waitUntil(10_000) {
             ViewCompat.getRootWindowInsets(ui.activity.window.decorView)?.isVisible(WindowInsetsCompat.Type.ime()) == true
         }
-        shot("15-keyboard-long-brief")
+        shot("15-keyboard-long-brief-$iteration")
         device.pressBack()
         ui.waitUntil(10_000) {
             ViewCompat.getRootWindowInsets(ui.activity.window.decorView)?.isVisible(WindowInsetsCompat.Type.ime()) == false
@@ -139,7 +147,8 @@ class DemoFlowTest {
         ui.activityRule.scenario.recreate()
         screen("c-brief"); ui.onNodeWithTag("task").assertTextContains(text)
         tap("brief-next"); tap("review"); tap("submit"); screen("c-sent")
-        shot("16-long-brief-completed")
+        shot("16-long-brief-completed-$iteration")
+        android.util.Log.i("MitinInputValidation", "long-input iteration=$iteration PASS")
     }
 
     @Test fun demoDecisionAndMessagesPersistAcrossRoles() {

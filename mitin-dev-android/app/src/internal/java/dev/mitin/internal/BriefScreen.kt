@@ -23,7 +23,7 @@ val briefBudgets = linkedMapOf("under_10k" to "до 10 000 ₽", "10_20k" to "10
 @OptIn(ExperimentalLayoutApi::class)
 @Composable fun BriefScreen(vm: BriefViewModel) {
     Column(Modifier.widthIn(max = 600.dp).fillMaxWidth().fillMaxHeight()) {
-        Column(Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()).padding(20.dp),
+        Column(Modifier.testTag("brief-private-content").weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()).padding(20.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)) {
             BriefContent(vm)
         }
