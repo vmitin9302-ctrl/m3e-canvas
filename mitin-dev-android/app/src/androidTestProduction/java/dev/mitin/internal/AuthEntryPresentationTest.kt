@@ -5,6 +5,8 @@ import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.lifecycle.ViewModelProvider
 import androidx.test.platform.app.InstrumentationRegistry
 import androidx.test.uiautomator.UiDevice
+import androidx.test.uiautomator.By
+import dev.mitin.testing.replaceWhenReady
 import org.junit.Rule
 import org.junit.Test
 
@@ -16,11 +18,7 @@ class AuthEntryPresentationTest {
     private fun tap(tag:String) { waitFor(tag);ui.onNodeWithTag(tag).performScrollTo().performClick();ui.waitForIdle() }
     private fun fill(tag:String,value:String) {
         waitFor(tag)
-        val node=ui.onNodeWithTag(tag)
-        node.performScrollTo().performClick()
-        ui.waitUntil(10_000) { ui.onAllNodes(hasTestTag(tag) and isFocused()).fetchSemanticsNodes().isNotEmpty() }
-        node.performTextReplacement(value)
-        node.assertTextContains(value)
+        ui.replaceWhenReady(tag,value){ui.activity}
     }
     private fun hideIme() {
         var visible=false
@@ -34,6 +32,7 @@ class AuthEntryPresentationTest {
         val label=InstrumentationRegistry.getArguments().getString("authCase") ?: "manual"
         val folder=java.io.File(inst.targetContext.getExternalFilesDir(null),"auth-entry").apply{mkdirs()}
         org.junit.Assert.assertTrue(device.takeScreenshot(java.io.File(folder,"$label-$stage.png")))
+        org.junit.Assert.assertFalse("Android ANR dialog obscures the tested app",device.hasObject(By.textContains("isn't responding")))
     }
     private fun registration() {
         ui.waitUntil(60_000) { ui.onAllNodesWithTag("cabinet-email").fetchSemanticsNodes().isNotEmpty() || ui.onAllNodesWithTag("startup-retry").fetchSemanticsNodes().isNotEmpty() }
@@ -53,6 +52,11 @@ class AuthEntryPresentationTest {
         fill("cabinet-email","synthetic@example.test")
         fill("cabinet-password","five5")
         ui.onNodeWithTag("cabinet-password-error",useUnmergedTree=true).assertExists()
+        ui.waitUntil(10_000) {
+            var visible=false
+            ui.runOnUiThread { visible=androidx.core.view.ViewCompat.getRootWindowInsets(ui.activity.window.decorView)?.isVisible(androidx.core.view.WindowInsetsCompat.Type.ime())==true }
+            visible
+        }
         shot("password-error-keyboard")
         fill("cabinet-password","Six123")
         fill("cabinet-password-repeat","Six123")
