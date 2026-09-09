@@ -28,6 +28,13 @@ class AuthEntryPresentationTest {
         if(visible)device.pressBack()
         ui.waitForIdle()
     }
+    private fun shot(stage:String) {
+        ui.waitForIdle()
+        val inst=InstrumentationRegistry.getInstrumentation()
+        val label=InstrumentationRegistry.getArguments().getString("authCase") ?: "manual"
+        val folder=java.io.File(inst.targetContext.getExternalFilesDir(null),"auth-entry").apply{mkdirs()}
+        org.junit.Assert.assertTrue(device.takeScreenshot(java.io.File(folder,"$label-$stage.png")))
+    }
     private fun registration() {
         waitFor("cabinet-email")
         // Each matrix run starts with cleared app data. Later methods may use login mode.
@@ -40,7 +47,8 @@ class AuthEntryPresentationTest {
         fill("cabinet-name","Синтетический клиент")
         fill("cabinet-email","synthetic@example.test")
         fill("cabinet-password","five5")
-        ui.onNodeWithTag("cabinet-password-error").assertExists()
+        ui.onNodeWithTag("cabinet-password-error",useUnmergedTree=true).assertExists()
+        shot("password-error-keyboard")
         fill("cabinet-password","Six123")
         fill("cabinet-password-repeat","Six123")
         hideIme()
@@ -50,12 +58,12 @@ class AuthEntryPresentationTest {
         tap("cabinet-terms")
         ui.onNodeWithTag("cabinet-auth-submit").assertIsEnabled()
         fill("cabinet-phone","invalid")
-        ui.onNodeWithTag("cabinet-phone-error").assertExists()
+        ui.onNodeWithTag("cabinet-phone-error",useUnmergedTree=true).assertExists()
         ui.onNodeWithTag("cabinet-auth-submit").assertIsNotEnabled()
         fill("cabinet-phone","")
         ui.onNodeWithTag("cabinet-auth-submit").assertIsEnabled()
         fill("cabinet-password-repeat","different")
-        ui.onNodeWithTag("cabinet-password-repeat-error").assertExists()
+        ui.onNodeWithTag("cabinet-password-repeat-error",useUnmergedTree=true).assertExists()
         ui.onNodeWithTag("cabinet-auth-submit").assertIsNotEnabled()
         fill("cabinet-password-repeat","Six123")
         hideIme()
@@ -69,6 +77,8 @@ class AuthEntryPresentationTest {
         hideIme()
         ui.onNodeWithTag("cabinet-auth-submit").assertIsEnabled()
         // Deliberately do not click: no real accounts or delivery in production tests.
+        ui.onNodeWithTag("cabinet-auth-submit").performScrollTo()
+        shot("registration-valid")
     }
     @Test fun emailLinkInstructionsNeverAskForAnEmailedPassword() {
         registration()
@@ -79,6 +89,7 @@ class AuthEntryPresentationTest {
         ui.onNodeWithTag("cabinet-auth-submit").assertDoesNotExist()
         ui.activityRule.scenario.recreate()
         waitFor("verification-instructions")
+        shot("email-link")
         tap("auth-login")
         waitFor("cabinet-password")
         ui.onNodeWithTag("cabinet-token").assertDoesNotExist()
@@ -95,6 +106,7 @@ class AuthEntryPresentationTest {
             tap("audit-option-100");tap("audit-next")
         }
         ui.onNodeWithTag("audit-score").assertTextContains("100/100")
+        shot("audit-result")
         ui.activityRule.scenario.recreate();waitFor("audit-score")
         ui.onNodeWithTag("audit-score").assertTextContains("100/100")
         tap("audit-back")
