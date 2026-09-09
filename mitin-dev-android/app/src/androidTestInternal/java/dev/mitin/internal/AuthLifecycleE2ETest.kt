@@ -56,6 +56,7 @@ class AuthLifecycleE2ETest {
             CabinetApi(origin).call("auth/verify-email","POST",body=buildJsonObject{put("token",token)})
         }
         tap("auth-login");fill("cabinet-email",email);fill("cabinet-password","Six123");hideIme();tap("cabinet-auth-submit")
+        ui.waitUntil(60_000){manager.state.value.profile != null}
         waitFor("internal-nav-0")
         assertNotNull(manager.state.value.profile)
         ui.onNodeWithTag("internal-nav-0").assertIsSelected()
@@ -65,6 +66,7 @@ class AuthLifecycleE2ETest {
         assertNotNull(runBlocking{KeystoreRefreshStore(ui.activity).read()?.refresh})
     }
     @Test fun restoredSessionOpensMainAndLogoutReturnsToLogin() {
+        ui.waitUntil(60_000){!manager.state.value.restoring && manager.state.value.profile != null}
         waitFor("internal-nav-0")
         assertNotNull(manager.state.value.profile)
         ui.onNodeWithTag("internal-nav-0").assertIsSelected()
@@ -82,6 +84,7 @@ class AuthLifecycleE2ETest {
         ui.onNodeWithTag("auth-register").assertExists()
     }
     @Test fun revokeServerSessionWithoutClearingLocalCredentials() {
+        ui.waitUntil(60_000){!manager.state.value.restoring && manager.state.value.profile != null}
         waitFor("internal-nav-0")
         runBlocking {
             manager.authorizedMutation { token -> HttpAuthApi(origin).logout(token,0,false) }

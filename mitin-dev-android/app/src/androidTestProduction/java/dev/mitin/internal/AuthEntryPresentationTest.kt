@@ -36,6 +36,11 @@ class AuthEntryPresentationTest {
         org.junit.Assert.assertTrue(device.takeScreenshot(java.io.File(folder,"$label-$stage.png")))
     }
     private fun registration() {
+        ui.waitUntil(60_000) { ui.onAllNodesWithTag("cabinet-email").fetchSemanticsNodes().isNotEmpty() || ui.onAllNodesWithTag("startup-retry").fetchSemanticsNodes().isNotEmpty() }
+        if(ui.onAllNodesWithTag("startup-retry").fetchSemanticsNodes().isNotEmpty()) {
+            println("Startup showed a network error; exercising its explicit Retry action")
+            ui.onNodeWithTag("startup-retry").performClick()
+        }
         waitFor("cabinet-email")
         // Each matrix run starts with cleared app data. Later methods may use login mode.
         if(ui.onAllNodesWithTag("auth-register").fetchSemanticsNodes().isNotEmpty())tap("auth-register")
@@ -43,7 +48,7 @@ class AuthEntryPresentationTest {
     }
     @Test fun validSixCharacterFormErrorsKeyboardBackAndRecreation() {
         registration()
-        ui.onNodeWithTag("internal-navigation-bar").assertDoesNotExist()
+        ui.onNodeWithTag("internal-nav-2").assertIsSelected()
         fill("cabinet-name","Синтетический клиент")
         fill("cabinet-email","synthetic@example.test")
         fill("cabinet-password","five5")
@@ -105,10 +110,10 @@ class AuthEntryPresentationTest {
             if(step==3) { ui.activityRule.scenario.recreate();waitFor("business-audit") }
             tap("audit-option-100");tap("audit-next")
         }
-        ui.onNodeWithTag("audit-score").assertTextContains("100/100")
+        ui.onNodeWithTag("audit-score").assertTextEquals("Digital Score: 100/100")
         shot("audit-result")
         ui.activityRule.scenario.recreate();waitFor("audit-score")
-        ui.onNodeWithTag("audit-score").assertTextContains("100/100")
+        ui.onNodeWithTag("audit-score").assertTextEquals("Digital Score: 100/100")
         tap("audit-back")
         ui.onNodeWithTag("audit-option-100").assertIsSelected()
         tap("audit-next")

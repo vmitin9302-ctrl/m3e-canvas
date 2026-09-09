@@ -1,6 +1,6 @@
 # Registration, account entry and business audit
 
-Clean installations open registration. Returning installations without a valid session open login. A server-confirmed profile opens the main interface. Logout clears credentials while retaining only a token-free account-entry preference; clearing app data removes that preference. Existing encrypted refresh credentials mark an upgraded installation as returning. No local boolean grants access.
+Clean installations land on registration. Returning installations without a valid session land on login. A server-confirmed profile lands on the main interface. Public Cases and AI brief remain available through navigation; private cabinet access still requires a validated session. Logout clears credentials while retaining only a token-free account-entry preference; clearing app data removes that preference. Existing encrypted refresh credentials mark an upgraded installation as returning. No local boolean grants access.
 
 Refresh tokens remain in the existing Keystore-backed no-backup store; access tokens stay in memory. Passwords and email tokens never enter SavedState or preferences. Non-secret form fields and consents survive Activity recreation. Password fields are deliberately cleared and validated again.
 

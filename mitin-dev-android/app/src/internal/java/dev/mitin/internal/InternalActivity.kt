@@ -123,22 +123,19 @@ class InternalActivity : ComponentActivity() {
     val brief: BriefViewModel = viewModel()
     val configured = vm.manager != null
     val auth = if (configured) vm.manager!!.state.collectAsStateWithLifecycle().value else AuthState(restoring = false)
-    val authEntry = configured && auth.profile == null &&
-        vm.getApplication<InternalApplication>().capabilities?.let { it.auth && (it.registration || BuildConfig.FLAVOR=="production") } == true
-    var tab by rememberSaveable { mutableIntStateOf(if(BuildConfig.FLAVOR == "production") 0 else 2) }
+    if (auth.restoring) { LaunchScreen(); return }
+    var tab by rememberSaveable { mutableIntStateOf(if(auth.profile != null) 0 else 2) }
     var showSessions by remember(auth.profile?.userId) { mutableStateOf(false) }
     var confirmAll by remember(auth.profile?.userId) { mutableStateOf(false) }
     var selected by remember(auth.profile?.userId) { mutableStateOf<RemoteSession?>(null) }
     val keyboard = LocalSoftwareKeyboardController.current
     val imeVisible = WindowInsets.ime.getBottom(LocalDensity.current) > 0
-    BackHandler(enabled = !authEntry && !imeVisible && (showSessions || tab != 2)) { showSessions = false; tab = 2; keyboard?.hide() }
-    if (auth.restoring) { LaunchScreen(); return }
-    // A server-confirmed profile is the only way out of the authentication entry.
-    // On logout/revocation the entry appears immediately, regardless of the saved tab.
+    BackHandler(enabled = !imeVisible && (showSessions || tab != 2)) { showSessions = false; tab = 2; keyboard?.hide() }
+    // Authentication determines the landing tab and private cabinet, not access to public content.
     var previousUser by rememberSaveable { mutableStateOf(auth.profile?.userId) }
     LaunchedEffect(auth.profile?.userId) {
         if(previousUser != auth.profile?.userId) {
-            if(auth.profile != null)tab=0
+            tab=if(auth.profile != null)0 else 2
             previousUser=auth.profile?.userId
         }
     }
@@ -158,12 +155,11 @@ class InternalActivity : ComponentActivity() {
             }
         }
     }, bottomBar = {
-        if (!imeVisible && !authEntry) InternalNavigationBar(tab) { tab = it; showSessions = false; keyboard?.hide() }
+        if (!imeVisible) InternalNavigationBar(tab) { tab = it; showSessions = false; keyboard?.hide() }
     }) { padding ->
         Box(Modifier.fillMaxSize().background(BrandBackground).padding(padding), contentAlignment = Alignment.TopCenter) {
             key(auth.profile?.userId, tab, showSessions) {
-                if (authEntry) CabinetScreen(vm)
-                else if (tab == 1) BriefScreen(brief)
+                if (tab == 1) BriefScreen(brief)
                 else if (tab == 2 && configured && vm.getApplication<InternalApplication>().capabilities?.let { it.auth && (it.cabinet || it.owner || BuildConfig.FLAVOR == "production") } == true) CabinetScreen(vm)
                 else Column(Modifier.widthIn(max = 600.dp).fillMaxWidth().fillMaxHeight().verticalScroll(rememberScrollState()).padding(20.dp),
                     verticalArrangement = Arrangement.spacedBy(16.dp)) {

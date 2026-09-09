@@ -156,6 +156,7 @@ class CabinetUiE2ETest {
             assertTrue(manager.state.value.mfaRequired); assertNull(manager.state.value.profile)
             fill("owner-mfa-code",runBlocking { ownerCode() });hideKeyboard();tap("owner-mfa-submit")
         }
+        ui.waitUntil(60_000){manager.state.value.profile != null}
         tap("internal-nav-2");waitFor("cabinet-projects");waitFor("cabinet-summary")
     }
     @Test fun registrationProjectMessagesOwnerAndRecreation() {
