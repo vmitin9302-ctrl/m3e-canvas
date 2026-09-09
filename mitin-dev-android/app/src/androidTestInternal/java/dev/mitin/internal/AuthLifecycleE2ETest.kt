@@ -37,7 +37,7 @@ class AuthLifecycleE2ETest {
     }
     @Test fun registerVerifyLoginAndLeaveSecureSession() {
         waitFor("cabinet-name") // Clean install must start on registration, not Cases.
-        val email="entry-${UUID.randomUUID()}@example.test"
+        val email="cabinet-entry-${UUID.randomUUID()}@example.test"
         fill("cabinet-name","Синтетический клиент");fill("cabinet-email",email)
         fill("cabinet-password","Six123");fill("cabinet-password-repeat","Six123");hideIme()
         tap("cabinet-consent");tap("cabinet-terms")
