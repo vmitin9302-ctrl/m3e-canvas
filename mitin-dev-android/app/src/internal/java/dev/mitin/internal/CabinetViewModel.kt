@@ -22,6 +22,10 @@ class CabinetViewModel(app: Application) : AndroidViewModel(app) {
     var items by mutableStateOf<List<JsonObject>>(emptyList()); private set
     var status by mutableStateOf(CabinetStatus.Empty); private set
     var notice by mutableStateOf<String?>(null); private set
+    var authMode by mutableStateOf(initialAuthMode(
+        (app as InternalApplication).authEntryHistory.returning,
+        app.capabilities?.registration == true,
+    ))
     var nextOffset by mutableStateOf<Int?>(null); private set
     var busy by mutableStateOf(false); private set
     var owner by mutableStateOf(false); private set
@@ -55,7 +59,10 @@ class CabinetViewModel(app: Application) : AndroidViewModel(app) {
                     workVersion++;job?.cancel(); userId = auth.profile?.userId; owner = auth.profile?.role == "owner"
                     document = JsonObject(emptyMap()); items = emptyList(); history.clear(); route = CabinetRoute()
                     nextOffset = null; notice = null; pendingMessage = null; editRecord=null;form=null;messageDraft=""; busy = false
-                    if (auth.profile != null) refresh() else status = CabinetStatus.Unauthorized
+                    if (auth.profile != null) refresh() else {
+                        authMode = "login"
+                        status = CabinetStatus.Unauthorized
+                    }
                 }
             }
         }
@@ -120,8 +127,17 @@ class CabinetViewModel(app: Application) : AndroidViewModel(app) {
     }
     fun refresh(more: Boolean = false) = run { load(more) }
     fun authAction(action: String, data: JsonObject, done: () -> Unit) = run {
-        repository.publicAction("auth/$action", data)
-        notice = if(action == "verify-email") "Email подтверждён. Можно войти." else "Если данные подходят, письмо отправлено."
+        try { repository.publicAction("auth/$action", data) }
+        catch (failure: AuthFailure) {
+            if (failure.status != 401) throw failure
+            notice = "Ссылка недействительна, уже использована или срок её действия истёк. Запросите новое письмо."
+            return@run
+        }
+        notice = when(action) {
+            "verify-email" -> "Email подтверждён. Можно войти."
+            "password-reset/confirm" -> "Пароль изменён. Войдите с новым паролем."
+            else -> "Проверьте почту. Если адрес подходит для этого действия, вы получите письмо."
+        }
         done()
     }
     fun saveProfile(data: JsonObject) = run { repository.mutate("profile", "PATCH", data); load();form=null }

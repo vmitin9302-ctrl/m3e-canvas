@@ -38,7 +38,7 @@ private fun mailCode(email:String,purpose:String="verify_email"):String = HttpAu
 private fun fault(mode:String) {HttpAuthApi.secureClient().newCall(Request.Builder().url(ORIGIN+"test/cabinet-fault")
     .post(obj("mode" to mode).toString().toRequestBody("application/json".toMediaType())).build()).execute().use{check(it.isSuccessful)}}
 private suspend fun register(api:CabinetApi,email:String) {
-    api.call("auth/register","POST",body=buildJsonObject {put("name","Синтетический клиент кабинета");put("email",email);put("password",TEST_PASSWORD);put("consent",true)})
+    api.call("auth/register","POST",body=buildJsonObject {put("name","Синтетический клиент кабинета");put("email",email);put("password",TEST_PASSWORD);put("consent",true);put("terms_consent",true)})
     api.call("auth/verify-email","POST",body=obj("token" to withContext(Dispatchers.IO){mailCode(email)}))
 }
 
@@ -94,10 +94,11 @@ class CabinetNetworkE2ETest {
             val foreignFile=runCatching{other.download(id,file.text("id"))}.exceptionOrNull();assertTrue(foreignFile is AuthFailure && foreignFile.status==404)
             assertTrue(admin.read("owner/analytics").number("project_count")!!>=1)
             client.publicAction("auth/password-reset/request",obj("email" to email))
-            client.publicAction("auth/password-reset/confirm",obj("token" to withContext(Dispatchers.IO){mailCode(email,"password_reset")},"password" to TEST_PASSWORD))
+            client.publicAction("auth/password-reset/confirm",obj("token" to withContext(Dispatchers.IO){mailCode(email,"password_reset")},"password" to TEST_PASSWORD+"new"))
             assertTrue(runCatching{client.read(path)}.isFailure)
             assertNull(a.state.value.profile)
-            a.login(email,Secret(TEST_PASSWORD));assertEquals(id,client.read(path).text("id"))
+            assertTrue(runCatching { a.login(email,Secret(TEST_PASSWORD)) }.isFailure)
+            a.login(email,Secret(TEST_PASSWORD+"new"));assertEquals(id,client.read(path).text("id"))
         } finally {for(manager in managers) runCatching{manager.logout()};for(store in stores)store.clear();scope.cancel()}
     }
 }
@@ -155,15 +156,31 @@ class CabinetUiE2ETest {
             assertTrue(manager.state.value.mfaRequired); assertNull(manager.state.value.profile)
             fill("owner-mfa-code",runBlocking { ownerCode() });hideKeyboard();tap("owner-mfa-submit")
         }
-        waitFor("cabinet-projects");waitFor("cabinet-summary")
+        tap("internal-nav-2");waitFor("cabinet-projects");waitFor("cabinet-summary")
     }
     @Test fun registrationProjectMessagesOwnerAndRecreation() {
         runBlocking{manager.logout()}
         waitFor("cabinet-email")
         val email="cabinet-${UUID.randomUUID()}@example.test"
-        tap("auth-register");fill("cabinet-email",email);fill("cabinet-name","Синтетический клиент");fill("cabinet-password",TEST_PASSWORD);hideKeyboard();tap("cabinet-consent");tap("cabinet-auth-submit")
-        waitFor("cabinet-token")
-        fill("cabinet-token",runBlocking(Dispatchers.IO){mailCode(email)});hideKeyboard();tap("cabinet-auth-submit")
+        if(ui.onAllNodesWithTag("auth-register").fetchSemanticsNodes().isNotEmpty())tap("auth-register")
+        fill("cabinet-email",email);fill("cabinet-name","Синтетический клиент");fill("cabinet-password","Six123")
+        hideKeyboard();ui.onNodeWithTag("cabinet-auth-submit").assertIsNotEnabled()
+        fill("cabinet-password-repeat","Six123");hideKeyboard();tap("cabinet-consent");tap("cabinet-terms")
+        try {
+            runBlocking(Dispatchers.IO){fault("offline")};tap("cabinet-auth-submit");waitFor("cabinet-notice")
+            ui.waitForIdle();ui.onNodeWithText("Нет связи с сервисом. Проверьте подключение.").assertIsDisplayed();shot("registration-offline")
+        } finally { runBlocking(Dispatchers.IO){fault("none")} }
+        tap("cabinet-auth-submit")
+        waitFor("verification-instructions")
+        ui.onNodeWithTag("cabinet-token").assertDoesNotExist()
+        ui.onNodeWithTag("cabinet-auth-submit").assertDoesNotExist()
+        ui.activityRule.scenario.recreate();ui.waitForIdle();waitFor("verification-instructions")
+        // The HTTPS email page performs this POST, not an invented in-app code form.
+        runBlocking { CabinetApi(ORIGIN).call("auth/verify-email","POST",body=obj("token" to withContext(Dispatchers.IO){mailCode(email)})) }
+        tap("auth-login")
+        waitFor("cabinet-email");tap("auth-password-reset/request");fill("cabinet-email",email);hideKeyboard();tap("cabinet-auth-submit")
+        waitFor("cabinet-notice")
+        runBlocking { CabinetApi(ORIGIN).call("auth/password-reset/confirm","POST",body=obj("token" to withContext(Dispatchers.IO){mailCode(email,"password_reset")},"password" to TEST_PASSWORD)) }
         waitFor("cabinet-email");login(email);shot("client-dashboard")
         tap("cabinet-profile");tap("cabinet-add");fill("field-city","Москва");hideKeyboard()
         ui.activityRule.scenario.recreate();ui.waitForIdle();waitFor("field-city");ui.onNodeWithTag("field-city").assertTextContains("Москва")

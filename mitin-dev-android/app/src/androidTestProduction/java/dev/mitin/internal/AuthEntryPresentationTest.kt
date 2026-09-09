@@ -1,0 +1,106 @@
+package dev.mitin.internal
+
+import androidx.compose.ui.test.*
+import androidx.compose.ui.test.junit4.createAndroidComposeRule
+import androidx.lifecycle.ViewModelProvider
+import androidx.test.platform.app.InstrumentationRegistry
+import androidx.test.uiautomator.UiDevice
+import org.junit.Rule
+import org.junit.Test
+
+/** Read-only production smoke: never submits registration, login, email or AI requests. */
+class AuthEntryPresentationTest {
+    @get:Rule val ui=createAndroidComposeRule<InternalActivity>()
+    private val device get()=UiDevice.getInstance(InstrumentationRegistry.getInstrumentation())
+    private fun waitFor(tag:String) { ui.waitUntil(60_000) { ui.onAllNodesWithTag(tag).fetchSemanticsNodes().isNotEmpty() } }
+    private fun tap(tag:String) { waitFor(tag);ui.onNodeWithTag(tag).performScrollTo().performClick();ui.waitForIdle() }
+    private fun fill(tag:String,value:String) {
+        waitFor(tag)
+        val node=ui.onNodeWithTag(tag)
+        node.performScrollTo().performClick()
+        ui.waitUntil(10_000) { ui.onAllNodes(hasTestTag(tag) and isFocused()).fetchSemanticsNodes().isNotEmpty() }
+        node.performTextReplacement(value)
+        node.assertTextContains(value)
+    }
+    private fun hideIme() {
+        var visible=false
+        ui.runOnUiThread { visible=androidx.core.view.ViewCompat.getRootWindowInsets(ui.activity.window.decorView)?.isVisible(androidx.core.view.WindowInsetsCompat.Type.ime())==true }
+        if(visible)device.pressBack()
+        ui.waitForIdle()
+    }
+    private fun registration() {
+        waitFor("cabinet-email")
+        // Each matrix run starts with cleared app data. Later methods may use login mode.
+        if(ui.onAllNodesWithTag("auth-register").fetchSemanticsNodes().isNotEmpty())tap("auth-register")
+        waitFor("cabinet-name")
+    }
+    @Test fun validSixCharacterFormErrorsKeyboardBackAndRecreation() {
+        registration()
+        ui.onNodeWithTag("internal-navigation-bar").assertDoesNotExist()
+        fill("cabinet-name","Синтетический клиент")
+        fill("cabinet-email","synthetic@example.test")
+        fill("cabinet-password","five5")
+        ui.onNodeWithTag("cabinet-password-error").assertExists()
+        fill("cabinet-password","Six123")
+        fill("cabinet-password-repeat","Six123")
+        hideIme()
+        ui.onNodeWithTag("cabinet-auth-submit").assertIsNotEnabled()
+        tap("cabinet-consent")
+        ui.onNodeWithTag("cabinet-auth-submit").assertIsNotEnabled()
+        tap("cabinet-terms")
+        ui.onNodeWithTag("cabinet-auth-submit").assertIsEnabled()
+        fill("cabinet-phone","invalid")
+        ui.onNodeWithTag("cabinet-phone-error").assertExists()
+        ui.onNodeWithTag("cabinet-auth-submit").assertIsNotEnabled()
+        fill("cabinet-phone","")
+        ui.onNodeWithTag("cabinet-auth-submit").assertIsEnabled()
+        fill("cabinet-password-repeat","different")
+        ui.onNodeWithTag("cabinet-password-repeat-error").assertExists()
+        ui.onNodeWithTag("cabinet-auth-submit").assertIsNotEnabled()
+        fill("cabinet-password-repeat","Six123")
+        hideIme()
+        ui.activityRule.scenario.recreate()
+        waitFor("cabinet-name")
+        ui.onNodeWithTag("cabinet-name").assertTextContains("Синтетический клиент")
+        org.junit.Assert.assertEquals("",ui.onNodeWithTag("cabinet-password").fetchSemanticsNode().config[androidx.compose.ui.semantics.SemanticsProperties.EditableText].text)
+        ui.onNodeWithTag("cabinet-auth-submit").assertIsNotEnabled()
+        fill("cabinet-password","TenChars12")
+        fill("cabinet-password-repeat","TenChars12")
+        hideIme()
+        ui.onNodeWithTag("cabinet-auth-submit").assertIsEnabled()
+        // Deliberately do not click: no real accounts or delivery in production tests.
+    }
+    @Test fun emailLinkInstructionsNeverAskForAnEmailedPassword() {
+        registration()
+        ui.runOnUiThread { ViewModelProvider(ui.activity)[CabinetViewModel::class.java].authMode="verify-email" }
+        waitFor("verification-instructions")
+        ui.onNodeWithTag("cabinet-token").assertDoesNotExist()
+        ui.onNodeWithTag("cabinet-password").assertDoesNotExist()
+        ui.onNodeWithTag("cabinet-auth-submit").assertDoesNotExist()
+        ui.activityRule.scenario.recreate()
+        waitFor("verification-instructions")
+        tap("auth-login")
+        waitFor("cabinet-password")
+        ui.onNodeWithTag("cabinet-token").assertDoesNotExist()
+        ui.onNodeWithTag("company-contacts").performScrollTo().assertExists()
+        ui.onNodeWithTag("company-contact-email").assertExists()
+    }
+    @Test fun nativeAuditKeepsAnswersAndComputesWebsiteScoreWithoutNetwork() {
+        registration()
+        tap("open-business-audit")
+        fill("audit-business","Синтетическая студия")
+        hideIme()
+        repeat(7) { step ->
+            if(step==3) { ui.activityRule.scenario.recreate();waitFor("business-audit") }
+            tap("audit-option-100");tap("audit-next")
+        }
+        ui.onNodeWithTag("audit-score").assertTextContains("100/100")
+        ui.activityRule.scenario.recreate();waitFor("audit-score")
+        ui.onNodeWithTag("audit-score").assertTextContains("100/100")
+        tap("audit-back")
+        ui.onNodeWithTag("audit-option-100").assertIsSelected()
+        tap("audit-next")
+        tap("audit-restart")
+        ui.onNodeWithTag("audit-next").assertIsNotEnabled()
+    }
+}
