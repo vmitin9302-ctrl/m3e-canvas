@@ -157,7 +157,7 @@ class CabinetUiE2ETest {
             fill("owner-mfa-code",runBlocking { ownerCode() });hideKeyboard();tap("owner-mfa-submit")
         }
         ui.waitUntil(60_000){manager.state.value.profile != null}
-        tap("internal-nav-2");waitFor("cabinet-projects");waitFor("cabinet-summary")
+        tap("internal-nav-3");waitFor("cabinet-projects");waitFor("cabinet-summary")
     }
     @Test fun registrationProjectMessagesOwnerAndRecreation() {
         runBlocking{manager.logout()}

@@ -55,7 +55,8 @@ class BusinessAuditViewModel(private val saved: SavedStateHandle) : ViewModel() 
         aiJob=viewModelScope.launch {
             loading=true
             try {
-                val text=fetchAuditCommentary(business,website,answers,result.score)
+                // A misconfigured origin or transport failure degrades to the offline result, never a crash.
+                val text=try { fetchAuditCommentary(business,website,answers,result.score) } catch (e: CancellationException) { throw e } catch (_: Exception) { null }
                 if(version==aiVersion)commentary=text ?: "AI-комментарий сейчас недоступен. Расчёт и рекомендации выше доступны без сети. Проверьте подключение и повторите запрос."
             } finally { if(version==aiVersion)loading=false }
         }

@@ -5,11 +5,13 @@ import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
+import androidx.lifecycle.ViewModelProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import androidx.test.runner.lifecycle.ActivityLifecycleMonitorRegistry
 import androidx.test.runner.lifecycle.Stage
 import androidx.test.uiautomator.UiDevice
+import dev.mitin.testing.replaceWhenReady
 import kotlinx.coroutines.*
 import org.junit.Assert.*
 import org.junit.Before
@@ -20,6 +22,7 @@ import java.io.File
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 
+/** Signed-out installs start on the native cabinet login; the four tabs appear only after a real server login. */
 @RunWith(AndroidJUnit4::class)
 class InternalUiTest {
     @get:Rule val ui=createAndroidComposeRule<InternalActivity>()
@@ -27,16 +30,20 @@ class InternalUiTest {
     private val device get()=UiDevice.getInstance(InstrumentationRegistry.getInstrumentation())
     private val large get()=InstrumentationRegistry.getArguments().getString("largeFont")=="true"
     private val manager get()=(context.applicationContext as InternalApplication).manager!!
+    private val sessionsVm get()=ViewModelProvider(ui.activity)[InternalViewModel::class.java]
     @Before fun reset() {
         runBlocking { withTimeout(30_000) {while(manager.state.value.restoring) delay(50)}; manager.logout(); manager.restore() }
-        ui.waitForIdle();tap("internal-nav-2")
+        ui.waitForIdle();waitFor("cabinet-email")
+        ui.onNodeWithTag("internal-navigation-bar").assertDoesNotExist()
     }
     private fun tap(tag:String) {
+        waitFor(tag)
         val node=ui.onNodeWithTag(tag)
         if(ui.onAllNodes(hasTestTag(tag) and hasAnyAncestor(hasScrollAction())).fetchSemanticsNodes().isNotEmpty()) node.performScrollTo()
         node.performClick();ui.waitForIdle()
     }
     private fun waitFor(tag:String) {ui.waitUntil(30_000){ui.onAllNodesWithTag(tag).fetchSemanticsNodes().isNotEmpty()}}
+    private fun fill(tag:String,value:String) { waitFor(tag);ui.replaceWhenReady(tag,value){ui.activity} }
     private fun shot(name:String) {
         ui.waitForIdle()
         // Semantics can be ready one rendered frame before SurfaceFlinger. Wait
@@ -60,31 +67,6 @@ class InternalUiTest {
         device.executeShellCommand("cp ${file.absolutePath} /sdcard/Download/mitin-network/${file.name}")
         assertEquals(file.length(),device.executeShellCommand("stat -c %s /sdcard/Download/mitin-network/${file.name}").trim().toLong())
     }
-    private fun login(email:String) {
-        waitFor("login-email")
-        ui.onNodeWithTag("login-email").performScrollTo().performTextReplacement(email)
-        ui.onNodeWithTag("login-password").performScrollTo().performClick().performTextReplacement(TEST_PASSWORD)
-        // Finish actual IME/inset transitions before scrolling to and physically
-        // tapping the button. After logout the status card makes this form longer.
-        ui.waitUntil(10_000) { imeVisible() }
-        device.pressBack()
-        ui.waitUntil(10_000) { !imeVisible() }
-        ui.onNodeWithTag("network-login").performScrollTo()
-        ui.waitForIdle()
-        ui.onNodeWithTag("network-login").assertIsDisplayed()
-        ui.onNodeWithTag("network-login").assertIsEnabled()
-        tap("network-login")
-        try {
-            // onClick clears password before starting the real request. Do not
-            // print the field value or dump a secret-bearing semantics tree.
-            ui.waitUntil(5_000) {
-                val fields=ui.onAllNodesWithTag("login-password").fetchSemanticsNodes()
-                fields.isEmpty() || fields.single().config[SemanticsProperties.EditableText].text.isEmpty()
-            }
-        } catch (failure: Throwable) { shot("11-login-action-not-invoked"); throw failure }
-        try { waitFor("server-profile") }
-        catch (failure: Throwable) { shot("12-login-result-timeout"); throw failure }
-    }
     private fun imeVisible():Boolean {
         var visible=false
         InstrumentationRegistry.getInstrumentation().runOnMainSync {
@@ -94,22 +76,49 @@ class InternalUiTest {
         }
         return visible
     }
+    private fun hideIme() { if(imeVisible()) { device.pressBack(); ui.waitUntil(10_000) { !imeVisible() } }; ui.waitForIdle() }
+    /** Real cabinet login through the shipped form, then the cabinet tab of the signed-in shell. */
+    private fun login(email:String) {
+        waitFor("cabinet-email")
+        // A fresh install defaults to registration mode; switch explicitly before a login flow.
+        if(ui.onAllNodesWithTag("entry-login").fetchSemanticsNodes().isNotEmpty()) tap("entry-login")
+        waitFor("cabinet-password")
+        fill("cabinet-email",email);fill("cabinet-password",TEST_PASSWORD)
+        ui.waitUntil(10_000) { imeVisible() }
+        hideIme()
+        ui.onNodeWithTag("cabinet-auth-submit").performScrollTo().assertIsDisplayed().assertIsEnabled()
+        tap("cabinet-auth-submit")
+        try {
+            // onClick clears the password before the request completes. Never dump the field value.
+            ui.waitUntil(5_000) {
+                val fields=ui.onAllNodesWithTag("cabinet-password").fetchSemanticsNodes()
+                fields.isEmpty() || fields.single().config[SemanticsProperties.EditableText].text.isEmpty()
+            }
+        } catch (failure: Throwable) { shot("11-login-action-not-invoked"); throw failure }
+        try {
+            ui.waitUntil(60_000) { manager.state.value.profile != null }
+            waitFor("internal-nav-3")
+        } catch (failure: Throwable) { shot("12-login-result-timeout"); throw failure }
+        ui.onNodeWithTag("internal-nav-0").assertIsSelected()
+        tap("internal-nav-3");waitFor("cabinet-projects")
+    }
     @Test fun realLoginProfileSessionsRevocationLogoutAllAndNewAccount() {
         if(large) assertTrue(context.resources.configuration.fontScale>=1.5f)
         shot("01-network-login")
         login(CLIENT_A);shot("02-server-profile-a")
+        assertEquals("Тестовый клиент А", manager.state.value.profile!!.displayName)
         // A second independent real server session is created outside this app manager.
         runBlocking { HttpAuthApi("https://localhost:8443/").login(CLIENT_A,Secret(TEST_PASSWORD),701) }
-        tap("open-sessions");waitFor("session-0");shot("03-real-sessions")
-        tap("revoke-0");tap("confirm-revoke")
-        ui.waitUntil(30_000) {
-            ui.onAllNodes(hasTestTag("session-0") and (hasText("Отозвана:",substring=true) or
-                hasAnyDescendant(hasText("Отозвана:",substring=true)))).fetchSemanticsNodes().isNotEmpty()
-        }
-        // Most recently created second session is item 0; current app stays signed in.
+        tap("cabinet-sessions")
+        ui.waitUntil(30_000) { sessionsVm.page.items.size >= 2 }
+        val other=sessionsVm.page.items.first { !it.current && it.revokedAt == null }
+        waitFor("revoke-${other.id}");shot("03-real-sessions")
+        tap("revoke-${other.id}")
+        ui.waitUntil(30_000) { !sessionsVm.busy && sessionsVm.page.items.any { it.id == other.id && it.revokedAt != null } }
+        // The other session is revoked on the server; the current app stays signed in.
         assertNotNull(manager.state.value.profile)
         shot("04-session-revoked")
-        tap("logout-all");tap("confirm-logout-all");waitFor("login-email")
+        tap("cabinet-logout-all");waitFor("cabinet-email")
         assertEquals("Все сессии отозваны на сервере.", manager.state.value.message)
         shot("05-server-logout-all")
         val previousActivity=ui.activity
@@ -135,23 +144,30 @@ class InternalUiTest {
         }
         ui.waitForIdle()
         assertNull(manager.state.value.profile)
-        waitFor("login-email")
+        waitFor("cabinet-email")
+        ui.onNodeWithTag("internal-navigation-bar").assertDoesNotExist()
         login(CLIENT_B);shot("06-server-profile-b")
-        ui.onNodeWithText("Тестовый клиент Б").assertExists()
+        assertEquals("Тестовый клиент Б", manager.state.value.profile!!.displayName)
         ui.onNodeWithText("Тестовый клиент А").assertDoesNotExist()
-        tap("network-logout");waitFor("login-email");shot("07-local-data-cleared")
+        tap("cabinet-logout");waitFor("cabinet-email");shot("07-local-data-cleared")
+        assertNull(manager.state.value.profile)
     }
-    @Test fun keyboardBackPasswordNotSavedAndFutureSectionsHonest() {
-        tap("internal-nav-0");waitFor("portfolio-ritmassage");ui.onNodeWithText("РиТМассаж").assertExists();shot("08-public-portfolio")
-        tap("internal-nav-1");ui.onNodeWithText("Что хотите создать?").assertExists();shot("09-ai-brief-setup")
-        tap("internal-nav-2")
-        ui.onNodeWithTag("login-email").performScrollTo().performTextReplacement(CLIENT_A)
-        ui.onNodeWithTag("login-password").performScrollTo().performClick().performTextReplacement(TEST_PASSWORD)
-        ui.waitUntil(10_000){ ViewCompat.getRootWindowInsets(ui.activity.window.decorView)?.isVisible(WindowInsetsCompat.Type.ime())==true }
+    @Test fun keyboardBackPasswordNotSavedAndTabsOnlyAfterLogin() {
+        fill("cabinet-email",CLIENT_A);fill("cabinet-password",TEST_PASSWORD)
+        ui.waitUntil(10_000){ imeVisible() }
         device.pressBack()
-        ui.waitUntil(10_000){ ViewCompat.getRootWindowInsets(ui.activity.window.decorView)?.isVisible(WindowInsetsCompat.Type.ime())==false }
-        ui.activityRule.scenario.recreate();waitFor("login-password")
-        assertEquals("", ui.onNodeWithTag("login-password").fetchSemanticsNode().config[SemanticsProperties.EditableText].text)
+        ui.waitUntil(10_000){ !imeVisible() }
+        ui.activityRule.scenario.recreate();waitFor("cabinet-password")
+        assertEquals("", ui.onNodeWithTag("cabinet-password").fetchSemanticsNode().config[SemanticsProperties.EditableText].text)
+        ui.onNodeWithTag("cabinet-email").assertTextContains(CLIENT_A)
         shot("10-recreated-login-no-password")
+        login(CLIENT_A)
+        tap("internal-nav-2");waitFor("portfolio-ritmassage");ui.onNodeWithText("РиТМассаж").assertExists();shot("08-public-portfolio")
+        tap("internal-nav-0");ui.onNodeWithText("Что хотите создать?").assertExists();shot("09-ai-brief-setup")
+        tap("internal-nav-1");waitFor("business-audit");shot("09-business-audit")
+        device.pressBack();ui.waitForIdle()
+        ui.onNodeWithTag("internal-nav-0").assertIsSelected()
+        tap("internal-nav-3");tap("cabinet-logout");waitFor("cabinet-email")
+        ui.onNodeWithTag("internal-navigation-bar").assertDoesNotExist()
     }
 }

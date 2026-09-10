@@ -36,8 +36,7 @@ private val states = mapOf("draft" to "Подготовка", "active" to "В р
 
 @Composable fun CabinetScreen(authVm: InternalViewModel, vm: CabinetViewModel = viewModel()) {
     val auth = authVm.manager!!.state.collectAsStateWithLifecycle().value
-    var showAudit by androidx.compose.runtime.saveable.rememberSaveable(auth.profile?.userId) { mutableStateOf(false) }
-    if(showAudit) { BusinessAuditScreen(close={showAudit=false}); return }
+    // The business audit is a separate signed-in tab; the cabinet no longer hosts it.
     val uriHandler=LocalUriHandler.current
     var form by vm::form
     var material by remember(auth.profile?.userId, vm.route) { mutableStateOf<String?>(null) }
@@ -62,7 +61,6 @@ private val states = mapOf("draft" to "Подготовка", "active" to "В р
             authVm.error?.let { InfoCard("Вход", it) }
             if (auth.profile == null) {
                 CabinetAuth(authVm, vm)
-                SecondaryAction("Аудит бизнеса", "open-business-audit") { showAudit=true }
                 CompanyContacts()
             } else {
                 if (vm.route != CabinetRoute()) SecondaryAction("Назад", "cabinet-back") { vm.back() }
@@ -93,10 +91,7 @@ private val states = mapOf("draft" to "Подготовка", "active" to "В р
                         SecondaryAction("Активные сессии", "cabinet-sessions") { form = "sessions"; authVm.sessions() }
                         SecondaryAction("Выйти", "cabinet-logout") { authVm.logout() }
                     }
-                    if(vm.route.section in setOf("dashboard","profile")) {
-                        SecondaryAction("Аудит бизнеса", "open-business-audit") { showAudit=true }
-                        CompanyContacts()
-                    }
+                    if(vm.route.section in setOf("dashboard","profile")) CompanyContacts()
                     CabinetDocument(if(vm.route.section=="dashboard") JsonObject(vm.document.filterKeys{it !in setOf("active_projects","new_messages","client_actions")}) else vm.document)
                     if(vm.route.section == "dashboard") for((key,title) in listOf("expected_actions" to "Ожидаемые действия","latest_updates" to "Последние обновления")) {
                         Text(title,style=MaterialTheme.typography.titleMedium)
@@ -225,6 +220,16 @@ private val states = mapOf("draft" to "Подготовка", "active" to "В р
     var terms by rememberSaveable { mutableStateOf(false) }
     val ime = WindowInsets.ime.getBottom(LocalDensity.current) > 0
     BackHandler(enabled = mode != "login" && !ime && !vm.busy) { mode="login";password="";confirmation="";token="" }
+    if (registration && mode in setOf("login", "register")) {
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            FilterChip(selected = mode == "login", enabled = !vm.busy && !auth.busy,
+                onClick = { mode = "login"; password = ""; confirmation = "" },
+                label = { Text("Вход") }, modifier = Modifier.testTag("entry-login"))
+            FilterChip(selected = mode == "register", enabled = !vm.busy && !auth.busy,
+                onClick = { mode = "register"; password = ""; confirmation = "" },
+                label = { Text("Регистрация") }, modifier = Modifier.testTag("entry-register"))
+        }
+    }
     Text(when(mode){"register"->"Регистрация клиента";"verify-email"->"Проверьте почту";"password-reset/request"->"Восстановление пароля";"password-reset/confirm"->"Новый пароль";else->"Вход"})
     if(mode in setOf("login","register","password-reset/request","resend-verification")) Input("Email",email,"cabinet-email",maxLines=1,error=if(email.isNotEmpty() && !validAuthForm("password-reset/request",email,"","","","",false,false)) "Укажите email в формате name@example.com." else null){email=it}
     if(mode == "register") {
@@ -254,7 +259,7 @@ private val states = mapOf("draft" to "Подготовка", "active" to "В р
     LaunchedEffect(vm.notice) {
         if (vm.notice != null) { withFrameNanos { }; noticeView.bringIntoView() }
     }
-    if(mode!="verify-email") PrimaryAction(if(vm.busy) "Выполняем…" else if(mode=="register") "Создать аккаунт" else "Продолжить","cabinet-auth-submit",!vm.busy && !auth.busy && valid) {
+    if(mode!="verify-email") PrimaryAction(if(vm.busy) "Выполняем…" else if(mode=="register") "Создать аккаунт" else if(mode=="login") "Войти" else "Продолжить","cabinet-auth-submit",!vm.busy && !auth.busy && valid) {
         if(mode == "login") { auth.login(email,Secret(password));password="" }
         else vm.authAction(mode,buildJsonObject {
             if(mode in setOf("register","password-reset/request","resend-verification")) put("email",email)

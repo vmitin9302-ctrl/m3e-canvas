@@ -1,6 +1,8 @@
 package dev.mitin.internal
 
 import androidx.compose.ui.test.*
+import androidx.activity.compose.setContent
+import dev.mitin.demo.MitinTheme
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.lifecycle.ViewModelProvider
 import androidx.test.platform.app.InstrumentationRegistry
@@ -47,7 +49,12 @@ class AuthEntryPresentationTest {
     }
     @Test fun validSixCharacterFormErrorsKeyboardBackAndRecreation() {
         registration()
-        ui.onNodeWithTag("internal-nav-2").assertIsSelected()
+        ui.onNodeWithTag("internal-navigation-bar").assertDoesNotExist()
+        // Signed-out entry offers an explicit choice; both modes are native, no web registration link.
+        ui.onNodeWithTag("entry-register").assertIsSelected()
+        tap("entry-login");waitFor("cabinet-password");ui.onNodeWithTag("cabinet-name").assertDoesNotExist()
+        ui.onNodeWithTag("cabinet-auth-submit").assertTextContains("Войти")
+        tap("entry-register");waitFor("cabinet-name")
         fill("cabinet-name","Синтетический клиент")
         fill("cabinet-email","synthetic@example.test")
         fill("cabinet-password","five5")
@@ -107,16 +114,17 @@ class AuthEntryPresentationTest {
     }
     @Test fun nativeAuditKeepsAnswersAndComputesWebsiteScoreWithoutNetwork() {
         registration()
-        tap("open-business-audit")
+        fun showAudit() { ui.activityRule.scenario.onActivity { activity -> activity.setContent { MitinTheme { BusinessAuditScreen(close = {}) } } }; ui.waitForIdle() }
+        showAudit()
         fill("audit-business","Синтетическая студия")
         hideIme()
         repeat(7) { step ->
-            if(step==3) { ui.activityRule.scenario.recreate();waitFor("business-audit") }
+            if(step==3) { ui.activityRule.scenario.recreate();showAudit();waitFor("business-audit") }
             tap("audit-option-100");tap("audit-next")
         }
         ui.onNodeWithTag("audit-score").assertTextEquals("Digital Score: 100/100")
         shot("audit-result")
-        ui.activityRule.scenario.recreate();waitFor("audit-score")
+        ui.activityRule.scenario.recreate();showAudit();waitFor("audit-score")
         ui.onNodeWithTag("audit-score").assertTextEquals("Digital Score: 100/100")
         tap("audit-back")
         ui.onNodeWithTag("audit-option-100").assertIsSelected()

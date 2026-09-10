@@ -124,20 +124,34 @@ class InternalActivity : ComponentActivity() {
     val configured = vm.manager != null
     val auth = if (configured) vm.manager!!.state.collectAsStateWithLifecycle().value else AuthState(restoring = false)
     if (auth.restoring) { LaunchScreen(); return }
-    var tab by rememberSaveable { mutableIntStateOf(if(auth.profile != null) 0 else 2) }
+    var tab by rememberSaveable { mutableIntStateOf(0) }
     var showSessions by remember(auth.profile?.userId) { mutableStateOf(false) }
     var confirmAll by remember(auth.profile?.userId) { mutableStateOf(false) }
     var selected by remember(auth.profile?.userId) { mutableStateOf<RemoteSession?>(null) }
     val keyboard = LocalSoftwareKeyboardController.current
     val imeVisible = WindowInsets.ime.getBottom(LocalDensity.current) > 0
-    BackHandler(enabled = !imeVisible && (showSessions || tab != 2)) { showSessions = false; tab = 2; keyboard?.hide() }
-    // Authentication determines the landing tab and private cabinet, not access to public content.
+    BackHandler(enabled = !imeVisible && (showSessions || tab != 0)) { showSessions = false; tab = 0; keyboard?.hide() }
+    // Signed-out sessions start at native authentication.
     var previousUser by rememberSaveable { mutableStateOf(auth.profile?.userId) }
     LaunchedEffect(auth.profile?.userId) {
         if(previousUser != auth.profile?.userId) {
-            tab=if(auth.profile != null)0 else 2
+            tab=0
             previousUser=auth.profile?.userId
         }
+    }
+    if (configured && auth.profile == null) {
+        Scaffold(Modifier.fillMaxSize().imePadding(), topBar = {
+            if (!imeVisible) Surface(color = MaterialTheme.colorScheme.surfaceContainer) {
+                Row(Modifier.fillMaxWidth().statusBarsPadding().padding(16.dp),
+                    verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    BrandEmblem(36.dp)
+                    Text("MITIN DEV", style = MaterialTheme.typography.titleLarge)
+                }
+            }
+        }) { padding ->
+            Box(Modifier.fillMaxSize().background(BrandBackground).padding(padding)) { CabinetScreen(vm) }
+        }
+        return
     }
     Scaffold(Modifier.fillMaxSize().imePadding(), topBar = {
         if (!imeVisible) Surface(color = MaterialTheme.colorScheme.surfaceContainer) {
@@ -159,13 +173,14 @@ class InternalActivity : ComponentActivity() {
     }) { padding ->
         Box(Modifier.fillMaxSize().background(BrandBackground).padding(padding), contentAlignment = Alignment.TopCenter) {
             key(auth.profile?.userId, tab, showSessions) {
-                if (tab == 1) BriefScreen(brief)
-                else if (tab == 2 && configured && vm.getApplication<InternalApplication>().capabilities?.let { it.auth && (it.cabinet || it.owner || BuildConfig.FLAVOR == "production") } == true) CabinetScreen(vm)
+                if (tab == 0) BriefScreen(brief)
+                else if (tab == 1) BusinessAuditScreen(close = { tab = 0 })
+                else if (tab == 3 && configured && vm.getApplication<InternalApplication>().capabilities?.let { it.auth && (it.cabinet || it.owner || BuildConfig.FLAVOR == "production") } == true) CabinetScreen(vm)
                 else Column(Modifier.widthIn(max = 600.dp).fillMaxWidth().fillMaxHeight().verticalScroll(rememberScrollState()).padding(20.dp),
                     verticalArrangement = Arrangement.spacedBy(16.dp)) {
                     when {
-                        tab == 0 -> PortfolioScreen(portfolio) { brief.fromPortfolio(portfolio.selectedSlug, (portfolio.detail as? PortfolioState.Success<PortfolioItem>)?.value?.title); tab = 1 }
-                        BuildConfig.FLAVOR == "production" -> PublicCabinet { tab = 1 }
+                        tab == 2 -> PortfolioScreen(portfolio) { brief.fromPortfolio(portfolio.selectedSlug, (portfolio.detail as? PortfolioState.Success<PortfolioItem>)?.value?.title); tab = 0 }
+                        BuildConfig.FLAVOR == "production" -> PublicCabinet { tab = 0 }
                         !configured -> { BrandHero("МОЙ КАБИНЕТ"); InfoCard("Тестовый сервер не настроен", "Для этой сборки не задан тестовый API. Подключение не выполняется.", true) }
                         auth.profile == null -> {
                             BrandHero("МОЙ КАБИНЕТ")
@@ -225,24 +240,29 @@ class InternalActivity : ComponentActivity() {
 }
 
 @Composable private fun InternalNavigationBar(selected: Int, onSelect: (Int) -> Unit) {
-    val destinations = listOf("Готовые проекты" to Icons.Outlined.WorkOutline,
-        "Обсудить с AI" to Icons.Outlined.AutoAwesome, "Мой кабинет" to Icons.Outlined.PersonOutline)
+    val destinations = listOf("AI-бриф" to Icons.Outlined.AutoAwesome,
+        "AI-аудит" to Icons.Outlined.Analytics, "Кейсы" to Icons.Outlined.WorkOutline, "Кабинет" to Icons.Outlined.PersonOutline)
     val density = LocalDensity.current
     val measurer = rememberTextMeasurer()
-    val labelStyle = MaterialTheme.typography.labelLarge.copy(textAlign = TextAlign.Center)
+    val labels = listOf("AI-бриф", "AI-аудит", "Кейсы", "Кабинет")
     // Consume horizontal safe insets before measuring; NavigationBar retains its
     // bottom system inset, outside the items' full-size touch targets.
     BoxWithConstraints(Modifier.fillMaxWidth().windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal))) {
         // Material NavigationBar has horizontal content padding. Reserve that
-        // space plus breathing room inside each of the three equal-width items.
+        // space plus breathing room inside each of the four equal-width items.
         val labelWidth = (maxWidth / destinations.size - 12.dp).coerceAtLeast(1.dp)
         val availablePixels = with(density) { labelWidth.roundToPx() }
-        val useShortLabels = destinations.any { (label, _) ->
-            label.split(' ').any { word ->
-                measurer.measure(AnnotatedString(word), style = labelStyle, softWrap = false).size.width > availablePixels
-            }
-        }
-        val labels = listOf("Кейсы", "AI-бриф", "Кабинет")
+        // Four items on 320 dp at 160% font cannot hold labelLarge without splitting a
+        // word. Step down through Material label styles until every word fits; the
+        // label is never ellipsized or broken inside a word.
+        val typography = MaterialTheme.typography
+        val labelStyle = listOf(typography.labelLarge, typography.labelMedium, typography.labelSmall)
+            .map { it.copy(textAlign = TextAlign.Center) }
+            .let { styles -> styles.firstOrNull { style ->
+                labels.all { label -> label.split(' ').all { word ->
+                    measurer.measure(AnnotatedString(word), style = style, softWrap = false).size.width <= availablePixels
+                } }
+            } ?: styles.last() }
         val textHeight = with(density) {
             labels.maxOf { label ->
                 measurer.measure(AnnotatedString(label), style = labelStyle,
