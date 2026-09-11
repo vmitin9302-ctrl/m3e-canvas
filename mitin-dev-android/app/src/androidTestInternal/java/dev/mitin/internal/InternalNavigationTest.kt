@@ -44,8 +44,8 @@ class InternalNavigationTest {
             safeRight = decor.width - insets.right
             assertTrue("System navigation inset must be present", insets.bottom > 0)
         }
-        val labels = listOf("Готовые проекты", "Обсудить с AI", "Мой кабинет")
-        val shortLabels = listOf("Кейсы", "AI-бриф", "Кабинет")
+        val labels = listOf("AI-бриф", "AI-аудит", "Кейсы", "Кабинет")
+        val shortLabels = labels
         val itemBounds = labels.indices.map { index ->
             val item = ui.onNodeWithTag("internal-nav-$index").assertIsDisplayed().assertHasClickAction()
                 .assertContentDescriptionEquals(labels[index])
@@ -110,22 +110,25 @@ class InternalNavigationTest {
         args.getString("expectedFontScale")?.toFloat()?.let { scale ->
             assertEquals(scale, context.resources.configuration.fontScale, 0.01f)
         }
-        ui.waitUntil(30_000) { ui.onAllNodesWithTag("internal-nav-2").fetchSemanticsNodes().isNotEmpty() }
-        for (index in 0..2) {
+        ui.waitUntil(30_000) { ui.onAllNodesWithTag("internal-nav-3").fetchSemanticsNodes().isNotEmpty() }
+        // Signed-out builds without an API origin still show the four-tab shell.
+        for (index in listOf(1, 2, 3, 0)) {
             val bounds = ui.onNodeWithTag("internal-nav-$index").fetchSemanticsNode().boundsInWindow
             assertTrue(device.click(bounds.center.x.toInt(), bounds.center.y.toInt()))
             ui.waitForIdle()
             ui.onNodeWithTag("internal-nav-$index").assertIsSelected()
             when (index) {
-                0 -> ui.onNodeWithTag("portfolio-error").assertExists()
-                1 -> ui.onNodeWithText("Что хотите создать?").assertExists()
-                2 -> ui.onNodeWithText("МОЙ КАБИНЕТ").assertExists()
+                0 -> ui.onNodeWithText("Что хотите создать?").assertExists()
+                1 -> ui.onNodeWithTag("business-audit").assertExists()
+                2 -> ui.onNodeWithTag("portfolio-error").assertExists()
+                3 -> ui.onNodeWithText("МОЙ КАБИНЕТ").assertExists()
             }
             shot(index)
             assertNavigationFits()
-            if (index != 2) {
+            if (index != 0) {
+                // System Back from any other tab returns to the AI brief home tab.
                 device.pressBack(); ui.waitForIdle()
-                ui.onNodeWithTag("internal-nav-2").assertIsSelected()
+                ui.onNodeWithTag("internal-nav-0").assertIsSelected()
                 assertNavigationFits()
             }
         }
@@ -150,6 +153,6 @@ class InternalNavigationTest {
             resumed
         }
         ui.waitForIdle()
-        ui.onNodeWithTag("internal-nav-2").assertIsSelected()
+        ui.onNodeWithTag("internal-nav-0").assertIsSelected()
     }
 }

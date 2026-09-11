@@ -33,6 +33,7 @@ class ProductionOfflineTest {
         device.executeShellCommand("cmd connectivity airplane-mode disable")
         device.executeShellCommand("svc wifi enable")
         device.executeShellCommand("svc data enable")
+        ui.waitUntil(60_000) { device.executeShellCommand("dumpsys connectivity").lineSequence().any { it.contains("WIFI CONNECTED") && it.contains("IS_VALIDATED") } }
         // Enabling the radio is asynchronous; wait for real DNS/TLS connectivity before testing Retry.
         runBlocking {
             var restored = false
@@ -43,6 +44,6 @@ class ProductionOfflineTest {
             check(restored) { "Emulator network did not recover after airplane mode" }
         }
         ui.onNodeWithTag("startup-retry").performSemanticsAction(SemanticsActions.OnClick) { it() }
-        ui.waitUntil(35_000) { ui.onAllNodesWithTag("portfolio-ritmassage").fetchSemanticsNodes().isNotEmpty() }
+        ui.waitUntil(35_000) { ui.onAllNodesWithTag("cabinet-email").fetchSemanticsNodes().isNotEmpty() }
     }
 }

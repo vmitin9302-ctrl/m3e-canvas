@@ -184,6 +184,11 @@ class BriefUiE2ETest {
         node.assertIsDisplayed().assertIsEnabled().performClick();ui.waitForIdle()
     }
     @Test fun portfolioBriefReviewContactConfirmAndRecreation() {
+        // The tabs exist only after a real server login; the brief itself stays anonymous server-side.
+        val manager=(ui.activity.application as InternalApplication).manager!!
+        runBlocking { withTimeout(60_000) { while(manager.state.value.restoring) delay(50) }
+            if(manager.state.value.profile == null) manager.login(CLIENT_A,Secret(TEST_PASSWORD)) }
+        waitFor("internal-nav-2")
         val label=InstrumentationRegistry.getArguments().getString("portfolioCase") ?: "brief"
         val repetitions=if(label == "brief-ui-360-1.0") 3 else 1
         repeat(repetitions) { index ->
@@ -193,7 +198,7 @@ class BriefUiE2ETest {
     }
     private fun journey(submit: Boolean) {
         val before=runBlocking(Dispatchers.IO) {count()}
-        tap("internal-nav-0")
+        tap("internal-nav-2")
         // The portfolio ViewModel deliberately retains the selected case across tabs.
         if(iteration > 1) tap("portfolio-back")
         waitFor("portfolio-ritmassage");tap("portfolio-open-ritmassage");waitFor("portfolio-detail-title");tap("portfolio-discuss")
@@ -265,16 +270,50 @@ class BriefUiE2ETest {
 /** The host removes/restores adb reverse around these separate OS-process phases. */
 class BriefOfflineUiTest {
     @get:Rule val ui=createAndroidComposeRule<InternalActivity>()
+    private val manager get()=(ui.activity.application as InternalApplication).manager!!
     private fun waitFor(tag:String)=ui.waitUntil(60_000) {ui.onAllNodesWithTag(tag).fetchSemanticsNodes().isNotEmpty()}
-    @Test fun persistStartWithoutNetwork() {
-        waitFor("internal-nav-1")
-        ui.onNodeWithTag("internal-nav-1").performClick();waitFor("brief-start")
-        ui.onNodeWithTag("brief-start").performScrollTo().performClick();waitFor("brief-error")
-        ui.onNodeWithTag("brief-retry").assertExists()
+    private fun tap(tag:String) {
+        waitFor(tag)
+        val node=ui.onNodeWithTag(tag)
+        if(ui.onAllNodes(hasTestTag(tag) and hasAnyAncestor(hasScrollAction())).fetchSemanticsNodes().isNotEmpty()) node.performScrollTo()
+        node.performClick();ui.waitForIdle()
     }
+    private fun hideIme() {
+        val device=UiDevice.getInstance(InstrumentationRegistry.getInstrumentation())
+        var visible=false
+        ui.runOnUiThread { visible=androidx.core.view.ViewCompat.getRootWindowInsets(ui.activity.window.decorView)?.isVisible(androidx.core.view.WindowInsetsCompat.Type.ime())==true }
+        if(visible)device.pressBack()
+        ui.waitForIdle()
+    }
+    /** A fresh install defaults to registration mode; switch explicitly before a login flow. */
+    private fun ensureLoginMode() {
+        if(ui.onAllNodesWithTag("entry-login").fetchSemanticsNodes().isNotEmpty()) tap("entry-login")
+        waitFor("cabinet-password")
+    }
+    /** Offline process start: no session can be restored, so only native login is shown and a login attempt fails safely. */
+    @Test fun persistStartWithoutNetwork() {
+        waitFor("cabinet-email")
+        ui.onNodeWithTag("internal-navigation-bar").assertDoesNotExist()
+        ensureLoginMode()
+        ui.replaceWhenReady("cabinet-email",CLIENT_A){ui.activity};ui.replaceWhenReady("cabinet-password",TEST_PASSWORD){ui.activity};hideIme()
+        tap("cabinet-auth-submit")
+        ui.waitUntil(60_000) { ui.onAllNodesWithText("Сервис временно недоступен. Проверьте подключение.").fetchSemanticsNodes().isNotEmpty() }
+        assertNull(manager.state.value.profile)
+        ui.onNodeWithTag("internal-navigation-bar").assertDoesNotExist()
+        waitFor("cabinet-auth-submit")
+    }
+    /** Fresh OS process online: the same install logs in and reaches the AI brief home tab. */
     @Test fun resumePersistedStart() {
-        waitFor("internal-nav-1")
-        ui.onNodeWithTag("internal-nav-1").performClick();waitFor("brief-message")
+        waitFor("cabinet-email")
+        ensureLoginMode()
+        ui.replaceWhenReady("cabinet-email",CLIENT_A){ui.activity};ui.replaceWhenReady("cabinet-password",TEST_PASSWORD){ui.activity};hideIme()
+        tap("cabinet-auth-submit")
+        ui.waitUntil(60_000){manager.state.value.profile != null}
+        waitFor("internal-nav-0");ui.onNodeWithTag("internal-nav-0").assertIsSelected()
+        waitFor("brief-start")
+        ui.onNodeWithTag("brief-start").performScrollTo().performClick();waitFor("brief-message")
+        ui.activityRule.scenario.recreate();ui.waitForIdle();waitFor("brief-message")
         ui.onNodeWithTag("brief-reset").performScrollTo().performClick();waitFor("brief-start")
+        runBlocking { manager.logout() };waitFor("cabinet-email")
     }
 }

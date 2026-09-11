@@ -137,6 +137,13 @@ jobs:
           adb shell settings put system font_scale 1.0
       - name: Internal navigation at 320, 360 and 412 dp with normal and 160 percent fonts
         run: python3 scripts/verify_navigation.py
+      - name: Production auth entry and native audit read-only matrix
+        run: |
+          adb install --no-streaming app/build/outputs/apk/production/debug/app-production-debug.apk
+          adb install --no-streaming app/build/outputs/apk/androidTest/production/debug/app-production-debug-androidTest.apk
+          adb shell cmd package compile -m speed -f dev.mitin.app
+          adb shell cmd package compile -m speed -f dev.mitin.app.test
+          python3 scripts/verify_auth_entry.py
       - name: Collect emulator diagnostics
         if: always()
         run: |

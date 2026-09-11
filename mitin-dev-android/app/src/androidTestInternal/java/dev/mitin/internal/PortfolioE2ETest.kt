@@ -10,13 +10,15 @@ import org.junit.Rule
 import org.junit.Test
 import java.io.File
 
-/** Real HTTPS -> FastAPI -> site's PROJECTS; no mock server in this test. */
+/** Real HTTPS -> FastAPI -> site's PROJECTS; no mock server in this test.
+ * The catalog lives on the signed-in Cases tab; signed-out installs only see native login. */
 class PortfolioE2ETest {
     @get:Rule val ui = createAndroidComposeRule<InternalActivity>()
     private val instrumentation get() = InstrumentationRegistry.getInstrumentation()
     private val device get() = UiDevice.getInstance(instrumentation)
     private fun waitFor(tag: String) = ui.waitUntil(30_000) { ui.onAllNodesWithTag(tag).fetchSemanticsNodes().isNotEmpty() }
     private fun tap(tag: String) {
+        waitFor(tag)
         val node = ui.onNodeWithTag(tag)
         if (ui.onAllNodes(hasTestTag(tag) and hasAnyAncestor(hasScrollAction())).fetchSemanticsNodes().isNotEmpty()) node.performScrollTo()
         node.performClick(); ui.waitForIdle()
@@ -30,11 +32,18 @@ class PortfolioE2ETest {
         device.executeShellCommand("mkdir -p /sdcard/Download/mitin-network")
         device.executeShellCommand("cp ${file.absolutePath} /sdcard/Download/mitin-network/${file.name}")
     }
-    @Test fun publicCatalogBeforeLoginDetailImagesRotationAndSessionIndependence() {
+    @Test fun catalogAfterLoginDetailImagesRotationAndSessionIndependence() {
         val manager = (instrumentation.targetContext.applicationContext as InternalApplication).manager!!
         runBlocking { withTimeout(30_000) { while (manager.state.value.restoring) delay(50) }; manager.logout() }
         assertNull(manager.state.value.profile)
-        tap("internal-nav-0"); waitFor("portfolio-ritmassage")
+        // Signed out: native login only, no tab bar and no catalog.
+        waitFor("cabinet-email")
+        ui.onNodeWithTag("internal-navigation-bar").assertDoesNotExist()
+        ui.onAllNodesWithTag("portfolio-ritmassage").assertCountEquals(0)
+        runBlocking { manager.login(CLIENT_A, Secret(TEST_PASSWORD)) }
+        waitFor("internal-nav-2")
+        ui.onNodeWithTag("internal-nav-0").assertIsSelected()
+        tap("internal-nav-2"); waitFor("portfolio-ritmassage")
         ui.onNodeWithText("РиТМассаж").assertExists()
         ui.onNodeWithText("DIVEEV STUDIO").assertExists()
         shot("list")
@@ -46,16 +55,22 @@ class PortfolioE2ETest {
         ui.onNodeWithTag("portfolio-site").performScrollTo().assertIsDisplayed(); shot("detail")
         ui.activityRule.scenario.recreate(); ui.waitForIdle()
         waitFor("portfolio-detail-title")
+        ui.onNodeWithTag("internal-nav-2").assertIsSelected()
         device.pressBack(); ui.waitForIdle(); waitFor("portfolio-ritmassage")
         tap("portfolio-open-diveev-studio"); waitFor("portfolio-detail-title")
         ui.onNodeWithTag("portfolio-detail-title").assertTextEquals("DIVEEV STUDIO")
+        // "Discuss a similar project" lands on the AI brief tab, not the audit.
         tap("portfolio-discuss"); ui.onNodeWithText("Что хотите создать?").assertExists()
-        runBlocking { manager.login(CLIENT_A, Secret(TEST_PASSWORD)) }
-        assertNotNull(manager.state.value.profile)
-        tap("internal-nav-0"); tap("portfolio-back"); tap("portfolio-refresh"); waitFor("portfolio-ritmassage")
+        ui.onNodeWithTag("internal-nav-0").assertIsSelected()
+        tap("internal-nav-2"); tap("portfolio-back"); tap("portfolio-refresh"); waitFor("portfolio-ritmassage")
         runBlocking { manager.logout() }
-        tap("portfolio-refresh"); waitFor("portfolio-ritmassage")
-        assertNull(manager.state.value.profile)
-        tap("internal-nav-2"); waitFor("login-email")
+        waitFor("cabinet-email"); assertNull(manager.state.value.profile)
+        ui.onNodeWithTag("internal-navigation-bar").assertDoesNotExist()
+        // Another account sees the same public catalog; the catalog is not account data.
+        runBlocking { manager.login(CLIENT_B, Secret(TEST_PASSWORD)) }
+        waitFor("internal-nav-2"); tap("internal-nav-2"); waitFor("portfolio-ritmassage")
+        ui.onNodeWithText("DIVEEV STUDIO").assertExists()
+        runBlocking { manager.logout() }
+        waitFor("cabinet-email")
     }
 }

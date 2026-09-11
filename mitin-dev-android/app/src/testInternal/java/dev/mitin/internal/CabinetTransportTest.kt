@@ -9,6 +9,23 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class CabinetTransportTest {
+    @Test fun sixCharacterRegistrationIsAnActualTlsPostWithoutCredentialsOrPhone()=tls {server,api->
+        server.enqueue(MockResponse().setResponseCode(202).setHeader("Cache-Control","no-store").setBody("{\"status\":\"check_email_if_eligible\"}"))
+        val password="Six123"
+        assertTrue(validAuthForm("register","synthetic@example.test","Synthetic",password,password,"",true,true,""))
+        api.call("auth/register","POST",body=buildJsonObject {
+            put("name","Synthetic");put("email","synthetic@example.test");put("password",password)
+            put("consent",true);put("terms_consent",true)
+        })
+        val request=server.takeRequest()
+        assertEquals("POST",request.method)
+        assertEquals("/api/v1/auth/register",request.path)
+        assertNull(request.getHeader("Authorization"));assertNull(request.getHeader("Cookie"))
+        val body=request.body.readUtf8()
+        assertTrue(body.contains("\"password\":\"Six123\""))
+        assertFalse(body.contains("phone"))
+        assertEquals(1,server.requestCount)
+    }
     private fun tls(block:suspend(MockWebServer,CabinetApi)->Unit)=runBlocking {
         val cert=HeldCertificate.Builder().commonName("localhost").addSubjectAlternativeName("localhost").build()
         val serverTls=HandshakeCertificates.Builder().heldCertificate(cert).build()

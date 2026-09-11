@@ -60,14 +60,18 @@ class ProductionValidationTest {
         device.executeShellCommand("mkdir -p /sdcard/Download/mitin-production")
         device.executeShellCommand("cp ${file.absolutePath} /sdcard/Download/mitin-production/${file.name}")
     }
+    private fun requireSignedIn() {
+        val manager = (context.applicationContext as InternalApplication).manager!!
+        ui.waitUntil(75_000) { !manager.state.value.restoring }
+        // Tabs exist only after login. This suite never creates production accounts or sessions.
+        org.junit.Assume.assumeTrue("Requires an already authenticated production session", manager.state.value.profile != null)
+    }
     @Test fun realProductionThreeBriefsNoSubmission() {
         assertEquals("yes", InstrumentationRegistry.getArguments().getString("authorizedProductionAi"))
-        waitFor("portfolio-ritmassage")
+        requireSignedIn()
+        tap("internal-nav-2"); waitFor("portfolio-ritmassage")
         val caps = (context.applicationContext as InternalApplication).capabilities!!
-        assertTrue(caps.ai); assertFalse(caps.submission); assertFalse(caps.auth)
-        val auth = (context.applicationContext as InternalApplication).manager!!.state.value
-        assertNull(auth.profile)
-        assertFalse(auth.mfaRequired)
+        assertTrue(caps.ai); assertFalse(caps.submission); assertTrue(caps.auth)
         ui.onNodeWithText("DIVEEV STUDIO").assertExists()
         ui.waitUntil(30_000) { ui.onAllNodesWithTag("portfolio-image").fetchSemanticsNodes().size == 2 }
         shot("catalog")
@@ -75,7 +79,7 @@ class ProductionValidationTest {
         val cases = listOf(null to "under_10k", "diveev-studio" to "10_20k", "ritmassage" to "unknown")
         for ((slug, budget) in cases) {
             if (slug != null) {
-                tap("internal-nav-0")
+                tap("internal-nav-2")
                 if (ui.onAllNodesWithTag("portfolio-back").fetchSemanticsNodes().isNotEmpty()) tap("portfolio-back")
                 tap("portfolio-open-$slug"); waitFor("portfolio-detail-title"); waitFor("portfolio-image")
                 ui.onNodeWithTag("portfolio-site").performScrollTo().assertIsDisplayed(); shot("case-$slug")
@@ -86,7 +90,7 @@ class ProductionValidationTest {
                 context.startActivity(android.content.Intent(context, InternalActivity::class.java).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK or android.content.Intent.FLAG_ACTIVITY_REORDER_TO_FRONT))
                 waitFor("portfolio-discuss")
                 tap("portfolio-discuss")
-            } else tap("internal-nav-1")
+            } else tap("internal-nav-0")
             tap("brief-service-site"); tap("brief-budget-$budget"); shot("selection-$budget"); tap("brief-start"); stable()
             waitFor("brief-message")
             assertEquals(budget, vm().state!!.budget); assertEquals(slug, vm().state!!.portfolio)
@@ -156,7 +160,8 @@ class ProductionValidationTest {
     }
 
     @Test fun retainedRealBriefMatrix() {
-        waitFor("internal-nav-1"); tap("internal-nav-1"); stable(); waitFor("brief-to-contact")
+        requireSignedIn()
+        waitFor("internal-nav-0"); tap("internal-nav-0"); stable(); waitFor("brief-to-contact")
         assertTrue(vm().state!!.finalBrief!!.length > 100)
         val label = InstrumentationRegistry.getArguments().getString("matrix") ?: "matrix"
         ui.onNodeWithTag("brief-message").performClick()
@@ -167,7 +172,7 @@ class ProductionValidationTest {
         ui.onNodeWithTag("brief-message").assertTextContains("Черновик без отправки").assertHeightIsAtLeast(androidx.compose.ui.unit.Dp(64f))
         ui.onNodeWithTag("brief-send").assertIsDisplayed().assertIsEnabled().assertHeightIsAtLeast(androidx.compose.ui.unit.Dp(48f))
         shot("$label-keyboard"); device.pressBack(); ui.waitForIdle()
-        waitFor("internal-nav-1")
+        waitFor("internal-nav-0")
         ui.onNodeWithTag("brief-message").assertTextContains("Черновик без отправки").performClick()
         Thread.sleep(800); ui.onNodeWithTag("brief-send").assertIsDisplayed()
         ui.activityRule.scenario.recreate(); ui.waitForIdle(); stable()
@@ -181,8 +186,8 @@ class ProductionValidationTest {
         ui.onNodeWithTag("brief-final").performScrollTo(); shot("$label-final")
         tap("brief-to-contact"); waitFor("submission-disabled"); shot("$label-closed")
         ui.activityRule.scenario.recreate(); ui.waitForIdle(); stable()
-        tap("internal-nav-2"); waitFor("production-auth-unavailable")
-        tap("internal-nav-0"); waitFor("portfolio-ritmassage")
+        tap("internal-nav-3"); waitFor("cabinet")
+        tap("internal-nav-2"); waitFor("portfolio-ritmassage")
         tap("portfolio-open-ritmassage"); waitFor("portfolio-detail-title"); device.pressBack(); ui.waitForIdle(); waitFor("portfolio-ritmassage")
     }
 }

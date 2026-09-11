@@ -6,6 +6,8 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.relocation.BringIntoViewRequester
+import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.*
 import androidx.compose.material.icons.Icons
@@ -14,6 +16,7 @@ import androidx.compose.material.icons.outlined.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.Alignment
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalUriHandler
@@ -33,6 +36,7 @@ private val states = mapOf("draft" to "Подготовка", "active" to "В р
 
 @Composable fun CabinetScreen(authVm: InternalViewModel, vm: CabinetViewModel = viewModel()) {
     val auth = authVm.manager!!.state.collectAsStateWithLifecycle().value
+    // The business audit is a separate signed-in tab; the cabinet no longer hosts it.
     val uriHandler=LocalUriHandler.current
     var form by vm::form
     var material by remember(auth.profile?.userId, vm.route) { mutableStateOf<String?>(null) }
@@ -52,11 +56,12 @@ private val states = mapOf("draft" to "Подготовка", "active" to "В р
     Column(Modifier.fillMaxSize().testTag("cabinet")) {
         Column(Modifier.weight(1f).fillMaxWidth().verticalScroll(scroll).padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Heading(if(auth.profile == null) "Личный кабинет" else if(vm.route.section=="dashboard") {if(vm.owner) "Кабинет владельца" else "Ваши проекты"} else sections[vm.route.section] ?: "Выберите клиента")
-            vm.notice?.let { InfoCard("Уведомление", it,tag="cabinet-notice") }
+            if (auth.profile != null) vm.notice?.let { InfoCard("Уведомление", it,tag="cabinet-notice") }
             auth.message?.let {InfoCard("Вход",it)}
             authVm.error?.let { InfoCard("Вход", it) }
             if (auth.profile == null) {
                 CabinetAuth(authVm, vm)
+                CompanyContacts()
             } else {
                 if (vm.route != CabinetRoute()) SecondaryAction("Назад", "cabinet-back") { vm.back() }
                 if (vm.busy) LinearProgressIndicator(Modifier.fillMaxWidth().testTag("cabinet-loading"))
@@ -86,6 +91,7 @@ private val states = mapOf("draft" to "Подготовка", "active" to "В р
                         SecondaryAction("Активные сессии", "cabinet-sessions") { form = "sessions"; authVm.sessions() }
                         SecondaryAction("Выйти", "cabinet-logout") { authVm.logout() }
                     }
+                    if(vm.route.section in setOf("dashboard","profile")) CompanyContacts()
                     CabinetDocument(if(vm.route.section=="dashboard") JsonObject(vm.document.filterKeys{it !in setOf("active_projects","new_messages","client_actions")}) else vm.document)
                     if(vm.route.section == "dashboard") for((key,title) in listOf("expected_actions" to "Ожидаемые действия","latest_updates" to "Последние обновления")) {
                         Text(title,style=MaterialTheme.typography.titleMedium)
@@ -192,10 +198,13 @@ private val states = mapOf("draft" to "Подготовка", "active" to "В р
     (value["project_sources"] as? JsonArray)?.forEach { element -> val source=element.jsonObject;Text("${mapOf("app" to "Приложение","site" to "Сайт","telegram" to "Telegram","max" to "MAX","vk" to "VK")[source.text("source")] ?: "Другой источник"}: ${source.text("count")}") }
 }
 
-@Composable internal fun Input(label:String, value:String, tag:String, secret:Boolean=false, maxLines:Int=5, changed:(String)->Unit) {
-    OutlinedTextField(value, changed, label={Text(label)}, modifier=Modifier.fillMaxWidth().testTag(tag), visualTransformation=if(secret) PasswordVisualTransformation() else VisualTransformation.None, singleLine=secret || maxLines==1, maxLines=if(secret) 1 else maxLines)
+@Composable internal fun Input(label:String, value:String, tag:String, secret:Boolean=false, maxLines:Int=5, error:String?=null, changed:(String)->Unit) {
+    OutlinedTextField(value, changed, label={Text(label)}, modifier=Modifier.fillMaxWidth().testTag(tag), visualTransformation=if(secret) PasswordVisualTransformation() else VisualTransformation.None, singleLine=secret || maxLines==1, maxLines=if(secret) 1 else maxLines,
+        isError=error != null, supportingText=error?.let { message -> { Text(message, Modifier.testTag("$tag-error")) } },
+        keyboardOptions=KeyboardOptions(keyboardType=if(secret) KeyboardType.Password else if(tag=="cabinet-email") KeyboardType.Email else if(tag=="cabinet-phone") KeyboardType.Phone else KeyboardType.Text))
 }
 
+@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable private fun CabinetAuth(auth:InternalViewModel, vm:CabinetViewModel) {
     val state = auth.manager!!.state.collectAsStateWithLifecycle().value
     if (state.mfaRequired) {
@@ -203,27 +212,64 @@ private val states = mapOf("draft" to "Подготовка", "active" to "В р
         return
     }
     val registration = auth.getApplication<InternalApplication>().capabilities?.registration == true
-    var mode by remember { mutableStateOf("login") }
+    var mode by vm::authMode
+    val uri = LocalUriHandler.current
     LaunchedEffect(registration) { if (!registration) mode = "login" }
-    var email by remember { mutableStateOf("") }; var password by remember {mutableStateOf("")}; var name by remember {mutableStateOf("")};var phone by remember {mutableStateOf("")};var token by remember {mutableStateOf("")};var consent by remember {mutableStateOf(false)}
-    Text(when(mode){"register"->"Регистрация клиента";"verify-email"->"Подтверждение email";"password-reset/request"->"Восстановление пароля";"password-reset/confirm"->"Новый пароль";else->"Вход"})
-    if(mode in setOf("login","register","password-reset/request","resend-verification")) Input("Email",email,"cabinet-email"){email=it}
-    if(mode == "register") {Input("Имя",name,"cabinet-name"){name=it};Input("Телефон (необязательно)",phone,"cabinet-phone"){phone=it}}
-    if(mode in setOf("login","register","password-reset/confirm")) Input("Пароль",password,"cabinet-password",true){password=it}
-    if(mode in setOf("register","password-reset/confirm")) Text("Пароль — от 15 до 128 символов.",style=MaterialTheme.typography.bodySmall)
-    if(mode in setOf("verify-email","password-reset/confirm")) Input("Код из письма",token,"cabinet-token",true){token=it}
+    var email by rememberSaveable { mutableStateOf("") }; var password by remember {mutableStateOf("")}; var name by rememberSaveable {mutableStateOf("")};var phone by rememberSaveable {mutableStateOf("")};var token by remember {mutableStateOf("")};var consent by rememberSaveable {mutableStateOf(false)}
+    var confirmation by remember { mutableStateOf("") }
+    var terms by rememberSaveable { mutableStateOf(false) }
+    val ime = WindowInsets.ime.getBottom(LocalDensity.current) > 0
+    BackHandler(enabled = mode != "login" && !ime && !vm.busy) { mode="login";password="";confirmation="";token="" }
+    if (registration && mode in setOf("login", "register")) {
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            FilterChip(selected = mode == "login", enabled = !vm.busy && !auth.busy,
+                onClick = { mode = "login"; password = ""; confirmation = "" },
+                label = { Text("Вход") }, modifier = Modifier.testTag("entry-login"))
+            FilterChip(selected = mode == "register", enabled = !vm.busy && !auth.busy,
+                onClick = { mode = "register"; password = ""; confirmation = "" },
+                label = { Text("Регистрация") }, modifier = Modifier.testTag("entry-register"))
+        }
+    }
+    Text(when(mode){"register"->"Регистрация клиента";"verify-email"->"Проверьте почту";"password-reset/request"->"Восстановление пароля";"password-reset/confirm"->"Новый пароль";else->"Вход"})
+    if(mode in setOf("login","register","password-reset/request","resend-verification")) Input("Email",email,"cabinet-email",maxLines=1,error=if(email.isNotEmpty() && !validAuthForm("password-reset/request",email,"","","","",false,false)) "Укажите email в формате name@example.com." else null){email=it}
+    if(mode == "register") {
+        Input("Имя",name,"cabinet-name",maxLines=1,error=if(name.isNotEmpty() && name.trim().codePointCount(0,name.trim().length) !in 1..120) "Имя должно содержать от 1 до 120 символов." else null){name=it}
+        Input("Телефон (необязательно)",phone,"cabinet-phone",maxLines=1,error=phoneError(phone)){phone=it}
+    }
+    if(mode in setOf("login","register","password-reset/confirm")) Input("Пароль",password,"cabinet-password",true,error=if(password.isNotEmpty()) passwordError(password) else null){password=it}
+    if(mode in setOf("register","password-reset/confirm")) Text("Пароль — от 6 до 128 символов.",style=MaterialTheme.typography.bodySmall)
+    if(mode in setOf("register","password-reset/confirm")) {
+        Input("Повтор пароля",confirmation,"cabinet-password-repeat",true,error=if(confirmation.isNotEmpty() && password != confirmation) "Пароли не совпадают." else null){confirmation=it}
+    }
+    if(mode == "password-reset/confirm") Input("Код из письма",token,"cabinet-token",true){token=it}
     if(mode == "register") {Row {Checkbox(consent,{consent=it},Modifier.testTag("cabinet-consent"));Text("Согласен на обработку данных для регистрации и работы над моими проектами")}}
-    PrimaryAction("Продолжить","cabinet-auth-submit",!vm.busy && !auth.busy) {
+    if(mode == "register") {
+        TextButton(onClick={uri.openUri("https://24promtbot.ru/privacy.html")}) {Text("Политика конфиденциальности")}
+        TextButton(onClick={uri.openUri("https://24promtbot.ru/consent.html")}) {Text("Согласие на обработку ПД")}
+        Row {Checkbox(terms,{terms=it},Modifier.testTag("cabinet-terms"));Text("Принимаю пользовательское соглашение")}
+        TextButton(onClick={uri.openUri("https://24promtbot.ru/terms.html")}) {Text("Пользовательское соглашение")}
+    }
+    val valid = validAuthForm(mode,email,name,password,confirmation,token,consent,terms,phone)
+    if(mode=="register" && !valid) Text("Для регистрации заполните имя, email, пароль и повтор пароля, отметьте оба согласия. Телефон необязателен.", Modifier.testTag("registration-requirements"), style=MaterialTheme.typography.bodySmall)
+    if(mode=="verify-email") Text("Откройте ссылку подтверждения из письма в браузере. Затем вернитесь в MITIN DEV и войдите с паролем, который вы создали при регистрации. Вводить код или пароль из письма не нужно.", Modifier.testTag("verification-instructions"))
+    val noticeView = remember { BringIntoViewRequester() }
+    vm.notice?.let { notice ->
+        Box(Modifier.bringIntoViewRequester(noticeView)) { InfoCard("Уведомление",notice,tag="cabinet-notice") }
+    }
+    LaunchedEffect(vm.notice) {
+        if (vm.notice != null) { withFrameNanos { }; noticeView.bringIntoView() }
+    }
+    if(mode!="verify-email") PrimaryAction(if(vm.busy) "Выполняем…" else if(mode=="register") "Создать аккаунт" else if(mode=="login") "Войти" else "Продолжить","cabinet-auth-submit",!vm.busy && !auth.busy && valid) {
         if(mode == "login") { auth.login(email,Secret(password));password="" }
         else vm.authAction(mode,buildJsonObject {
             if(mode in setOf("register","password-reset/request","resend-verification")) put("email",email)
-            if(mode == "register") {put("name",name);put("phone",phone);put("consent",consent)}
+            if(mode == "register") {put("name",name.trim());if(phone.isNotBlank())put("phone",phone.trim());put("consent",consent);put("terms_consent",terms)}
             if(mode in setOf("register","password-reset/confirm"))put("password",password)
             if(mode in setOf("verify-email","password-reset/confirm"))put("token",token)
-        }) { password="";token="";mode=if(mode=="register") "verify-email" else "login" }
+        }) { password="";confirmation="";token="";mode=if(mode=="register") "verify-email" else "login" }
     }
     if (!registration) Text("Регистрация временно недоступна", Modifier.testTag("registration-unavailable"))
-    for((action,label) in listOf("login" to "Уже есть аккаунт", "register" to "Создать аккаунт", "verify-email" to "Подтвердить email", "resend-verification" to "Отправить письмо ещё раз", "password-reset/request" to "Забыли пароль?", "password-reset/confirm" to "Есть код восстановления")) if(action != mode && (registration || action == "login")) SecondaryAction(label,"auth-$action"){mode=action;password="";token=""}
+    for((action,label) in listOf("login" to if(mode=="verify-email") "Я подтвердил email — войти" else "Уже есть аккаунт", "register" to "Создать аккаунт", "resend-verification" to "Отправить письмо ещё раз", "password-reset/request" to "Забыли пароль?")) if(!vm.busy && action != mode && (registration || action == "login")) SecondaryAction(label,"auth-$action"){mode=action;password="";confirmation="";token=""}
 }
 
 @Composable internal fun OwnerMfaScreen(busy: Boolean, error: String?, verify: (Secret) -> Unit, cancel: () -> Unit) {
